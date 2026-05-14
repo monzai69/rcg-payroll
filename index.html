@@ -399,26 +399,6 @@ const SK='rcg10_s',PK='rcg10_p',CK='rcg10_c',AK='rcg10_a',APK='rcg10_ap',BK='rcg
 let S=[],P={},C={},A=[],AP=[],B=[];
 let _eSid=null,_eBid=null,_eAid=null,_eAPid=null;
 
-function forceReloadStaff(){
-  if(!confirm('This will reload default staff data. Your custom salary data will be preserved if IDs match. Continue?'))return;
-  // Fix all existing staff first
-  S=S.map(s=>({
-    ...s,
-    st: (s.st==='Active'||s.st==='InActive') ? s.st : 'Active',
-    emptype: (s.emptype==='fulltime'||s.emptype==='fullparttime'||s.emptype==='parttime') ? s.emptype : 'fulltime',
-    wht: s.wht||3,
-    items: Array.isArray(s.items) ? s.items : []
-  }));
-  svS();
-  // If still no payroll-eligible staff, force seed
-  if(!S.filter(s=>s.st==='Active'&&s.emptype!=='parttime').length){
-    if(confirm('Still no payroll staff found. Reset ALL staff to default seed data?')){
-      localStorage.removeItem('rcg10_s');
-      seedS();
-    }
-  }
-  rPay();
-}
 function ld(){
   try{S=JSON.parse(localStorage.getItem(SK)||'[]')}catch{S=[]}
   try{P=JSON.parse(localStorage.getItem(PK)||'{}')}catch{P={}}
@@ -430,14 +410,8 @@ function ld(){
   if(!Array.isArray(C.depts))C.depts=['Marketing','Operation','CEO','COO'];
   if(!Array.isArray(C.itemNames))C.itemNames=['ค่ามือ','เบี้ยขยัน','ค่าตำแหน่ง','Incentive','Support','Commission','อื่นๆ'];
   if(!B.length)seedB();if(!S.length)seedS();
-  // Migration: ensure all staff have required fields with proper defaults
-  S=S.map(s=>({
-    ...s,
-    st: (s.st==='Active'||s.st==='InActive') ? s.st : 'Active',
-    emptype: (s.emptype==='fulltime'||s.emptype==='fullparttime'||s.emptype==='parttime') ? s.emptype : 'fulltime',
-    wht: s.wht||3,
-    items: Array.isArray(s.items) ? s.items : []
-  }));
+  // Migration: ensure all staff have required fields
+  S=S.map(s=>({st:'Active',emptype:'fulltime',wht:3,items:[],...s}));
   svS();
 }
 const sv=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
@@ -460,8 +434,6 @@ function evalItem(item,rev,mkt,e){
     default:return 0;
   }
 }
-
-const MTH=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function calcM(s,e,key){
   const isPerm=s.ct==='permanent',whtR=(parseFloat(C.wht)||3)/100,iWhtR=(parseFloat(s.wht)||3)/100;
   let baseGross=0,baseLabel='';
@@ -494,6 +466,8 @@ function calcM(s,e,key){
   }
 }
 
+
+const MTH=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function fmt(n){return Math.round(n||0).toLocaleString()}
 function avbg(d){return({Marketing:'#bfdbfe',Operation:'#fbcfe8',CEO:'#e0e7ff',COO:'#e0e7ff',Admin:'#fef3c7'})[d]||'#f3f4f6'}
 function avfg(d){return({Marketing:'#1e40af',Operation:'#9d174d',CEO:'#3730a3',COO:'#3730a3',Admin:'#92400e'})[d]||'#374151'}
@@ -652,11 +626,7 @@ function saveStaff(){
 function rPay(){
   const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);if(!P[key])P[key]={};
   const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');
-  if(!act.length){
-    q('pay-cards').innerHTML='<div style="text-align:center;padding:40px"><div style="font-size:14px;color:#6b7280;margin-bottom:16px">No payroll staff found.</div><div style="font-size:12px;color:#9ca3af;margin-bottom:20px">S='+S.length+' total staff · '+S.filter(s=>s.st===\'Active\').length+' active · '+S.filter(s=>s.emptype!==\'parttime\').length+' non-parttime</div><button onclick="forceReloadStaff()" style="background:#0f2744;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;font-family:\'Sarabun\',sans-serif">🔄 Reload Staff Data</button></div>';
-    console.log('rPay debug — S total:',S.length,'active:',S.filter(s=>s.st===\'Active\').length,'non-parttime:',S.filter(s=>s.emptype!==\'parttime\').length,'sample:',S.slice(0,2));
-    return;
-  }
+  if(!act.length){q('pay-cards').innerHTML='<div class="no-data">No full-time / full-part-time staff</div>';return}
   q('pay-cards').innerHTML=act.map(s=>{const e=P[key][s.id]||{sid:s.id,rev:0,mkt:0,otHrs:0,bonus:0,dLa:0,dOth:0,hours:0,days:0,periodic:{},diligence:{}};return buildCard(s,e,key)}).join('');
   updTopbar(act,key);updJump(act,key);
 }
