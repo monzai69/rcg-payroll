@@ -399,6 +399,26 @@ const SK='rcg10_s',PK='rcg10_p',CK='rcg10_c',AK='rcg10_a',APK='rcg10_ap',BK='rcg
 let S=[],P={},C={},A=[],AP=[],B=[];
 let _eSid=null,_eBid=null,_eAid=null,_eAPid=null;
 
+function forceReloadStaff(){
+  if(!confirm('This will reload default staff data. Your custom salary data will be preserved if IDs match. Continue?'))return;
+  // Fix all existing staff first
+  S=S.map(s=>({
+    ...s,
+    st: (s.st==='Active'||s.st==='InActive') ? s.st : 'Active',
+    emptype: (s.emptype==='fulltime'||s.emptype==='fullparttime'||s.emptype==='parttime') ? s.emptype : 'fulltime',
+    wht: s.wht||3,
+    items: Array.isArray(s.items) ? s.items : []
+  }));
+  svS();
+  // If still no payroll-eligible staff, force seed
+  if(!S.filter(s=>s.st==='Active'&&s.emptype!=='parttime').length){
+    if(confirm('Still no payroll staff found. Reset ALL staff to default seed data?')){
+      localStorage.removeItem('rcg10_s');
+      seedS();
+    }
+  }
+  rPay();
+}
 function ld(){
   try{S=JSON.parse(localStorage.getItem(SK)||'[]')}catch{S=[]}
   try{P=JSON.parse(localStorage.getItem(PK)||'{}')}catch{P={}}
@@ -410,8 +430,14 @@ function ld(){
   if(!Array.isArray(C.depts))C.depts=['Marketing','Operation','CEO','COO'];
   if(!Array.isArray(C.itemNames))C.itemNames=['ค่ามือ','เบี้ยขยัน','ค่าตำแหน่ง','Incentive','Support','Commission','อื่นๆ'];
   if(!B.length)seedB();if(!S.length)seedS();
-  // Migration: ensure all staff have required fields
-  S=S.map(s=>({st:'Active',emptype:'fulltime',wht:3,items:[],...s}));
+  // Migration: ensure all staff have required fields with proper defaults
+  S=S.map(s=>({
+    ...s,
+    st: (s.st==='Active'||s.st==='InActive') ? s.st : 'Active',
+    emptype: (s.emptype==='fulltime'||s.emptype==='fullparttime'||s.emptype==='parttime') ? s.emptype : 'fulltime',
+    wht: s.wht||3,
+    items: Array.isArray(s.items) ? s.items : []
+  }));
   svS();
 }
 const sv=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
@@ -436,6 +462,38 @@ function evalItem(item,rev,mkt,e){
 }
 
 const MTH=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function calcM(s,e,key){
+  const isPerm=s.ct==='permanent',whtR=(parseFloat(C.wht)||3)/100,iWhtR=(parseFloat(s.wht)||3)/100;
+  let baseGross=0,baseLabel='';
+  if(s.emptype==='fulltime'){baseGross=parseFloat(s.base)||0;baseLabel='Base '+fmt(baseGross)+'฿';}
+  else if(s.emptype==='fullparttime'){
+    if(s.fptmethod==='daily'){const d=parseFloat(e.days)||0,r=parseFloat(s.fptdayrate)||0;baseGross=d*r;baseLabel=d+'d × '+fmt(r)+'฿';}
+    else{const h=parseFloat(e.hours)||0,r=parseFloat(s.hrrate)||0;baseGross=h*r;baseLabel=h+'hrs × '+fmt(r)+'฿';}
+  }
+  const rev=parseFloat(e.rev)||0,mkt=parseFloat(e.mkt)||0;
+  const otHrs=parseFloat(e.otHrs)||0,otAmt=otHrs*(parseFloat(s.otrate)||0);
+  const bonus=parseFloat(e.bonus)||0,dLa=parseFloat(e.dLa)||0,dOth=parseFloat(e.dOth)||0;
+  let itemRows=[],grossItems=0,kamueTot=0;
+  (s.items||[]).forEach(item=>{
+    if(item.isDiligence&&!(e.diligence&&e.diligence[item.id]))return;
+    const gross=evalItem(item,rev,mkt,e);
+    const isK=['ค่ามือ','Commission','DF (Doctor Fee)'].includes(item.name);
+    if(item.isWHT){const wht=gross*iWhtR;itemRows.push({name:item.name,net:gross-wht,isWHT:true,isDiligence:!!item.isDiligence});grossItems+=gross-wht;if(isK)kamueTot+=gross-wht;}
+    else{itemRows.push({name:item.name,net:gross,isWHT:false,isDiligence:!!item.isDiligence});grossItems+=gross;if(isK)kamueTot+=gross;}
+  });
+  const grossAll=baseGross+grossItems+otAmt+bonus;
+  const advAmt=key?A.filter(a=>a.staffId===s.id&&a.key===key&&a.status==='pending').reduce((t,a)=>t+(parseFloat(a.amt)||0),0):0;
+  if(isPerm){
+    const ssoBase=Math.min(baseGross,parseFloat(C.ssoC)||17500),sso=ssoBase*((parseFloat(C.sso)||5)/100);
+    const aN=Math.max(0,grossAll*12-Math.min(grossAll*12*.5,parseFloat(C.d50)||100000)-(parseFloat(C.pers)||60000)-sso*12-(parseFloat(s.ex)||0));
+    const annualTax=pit(aN),monthlyTax=annualTax/12;
+    return{baseGross,baseLabel,otAmt,otHrs,bonus,grossItems,itemRows,sso,monthlyTax,annualTax,dLa,dOth,advAmt,gross:grossAll,net:grossAll-sso-monthlyTax-dLa-dOth-advAmt,isPerm,whtDeduct:0,rev,kamueTot};
+  }else{
+    const whtDeduct=grossAll*whtR;
+    return{baseGross,baseLabel,otAmt,otHrs,bonus,grossItems,itemRows,sso:0,monthlyTax:0,annualTax:0,dLa,dOth,advAmt,gross:grossAll,net:grossAll-whtDeduct-dLa-dOth-advAmt,isPerm,whtDeduct,rev,kamueTot};
+  }
+}
+
 function fmt(n){return Math.round(n||0).toLocaleString()}
 function avbg(d){return({Marketing:'#bfdbfe',Operation:'#fbcfe8',CEO:'#e0e7ff',COO:'#e0e7ff',Admin:'#fef3c7'})[d]||'#f3f4f6'}
 function avfg(d){return({Marketing:'#1e40af',Operation:'#9d174d',CEO:'#3730a3',COO:'#3730a3',Admin:'#92400e'})[d]||'#374151'}
@@ -594,7 +652,11 @@ function saveStaff(){
 function rPay(){
   const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);if(!P[key])P[key]={};
   const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');
-  if(!act.length){q('pay-cards').innerHTML='<div class="no-data">No full-time / full-part-time staff</div>';return}
+  if(!act.length){
+    q('pay-cards').innerHTML='<div style="text-align:center;padding:40px"><div style="font-size:14px;color:#6b7280;margin-bottom:16px">No payroll staff found.</div><div style="font-size:12px;color:#9ca3af;margin-bottom:20px">S='+S.length+' total staff · '+S.filter(s=>s.st===\'Active\').length+' active · '+S.filter(s=>s.emptype!==\'parttime\').length+' non-parttime</div><button onclick="forceReloadStaff()" style="background:#0f2744;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;font-family:\'Sarabun\',sans-serif">🔄 Reload Staff Data</button></div>';
+    console.log('rPay debug — S total:',S.length,'active:',S.filter(s=>s.st===\'Active\').length,'non-parttime:',S.filter(s=>s.emptype!==\'parttime\').length,'sample:',S.slice(0,2));
+    return;
+  }
   q('pay-cards').innerHTML=act.map(s=>{const e=P[key][s.id]||{sid:s.id,rev:0,mkt:0,otHrs:0,bonus:0,dLa:0,dOth:0,hours:0,days:0,periodic:{},diligence:{}};return buildCard(s,e,key)}).join('');
   updTopbar(act,key);updJump(act,key);
 }
