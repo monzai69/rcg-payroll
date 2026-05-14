@@ -436,6 +436,8 @@ function evalItem(item,rev,mkt,e){
 }
 
 const MTH=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function isTiered(t){return t==='comm_tiered'||t==='comm_tiered_fixed';}
+
 function calcM(s,e,key){
   const isPerm=s.ct==='permanent',whtR=(parseFloat(C.wht)||3)/100,iWhtR=(parseFloat(s.wht)||3)/100;
   let bG=0,bLabel='';
@@ -468,7 +470,11 @@ function calcM(s,e,key){
   }
 }
 
-function fmt(n){return Math.round(n||0).toLocaleString()}
+function fmt(n){
+  const v=parseFloat(n)||0;
+  if(v===Math.round(v))return Math.round(v).toLocaleString();
+  return v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
 function avbg(d){return({Marketing:'#bfdbfe',Operation:'#fbcfe8',CEO:'#e0e7ff',COO:'#e0e7ff',Admin:'#fef3c7'})[d]||'#f3f4f6'}
 function avfg(d){return({Marketing:'#1e40af',Operation:'#9d174d',CEO:'#3730a3',COO:'#3730a3',Admin:'#92400e'})[d]||'#374151'}
 function tenure(sd){if(!sd)return'-';const s=new Date(sd),n=new Date();let y=n.getFullYear()-s.getFullYear(),mo=n.getMonth()-s.getMonth(),d=n.getDate()-s.getDate();if(d<0){mo--;d+=30}if(mo<0){y--;mo+=12}return y+'y '+mo+'m'}
@@ -611,7 +617,18 @@ function addItemWith(item){
   tr.querySelector('button').addEventListener('click',()=>{tr.remove();checkTA();});
   tb.appendChild(tr);checkTA();
 }
-function checkTA(){const h=[...q('items-body').querySelectorAll('.itype')].some(el=>el.value==='comm_tiered');q('tier-area').style.display=h?'block':'none';if(h&&!document.querySelector('.tier-row'))renderTiers([{f:0,t:399999,r:1.5},{f:400000,t:799999,r:2},{f:800000,t:9999999,r:2.5}]);}
+function checkTA(){
+  const types=[...q('items-body').querySelectorAll('.itype')].map(el=>el.value);
+  const h=types.some(t=>isTiered(t));
+  const isFixed=types.some(t=>t==='comm_tiered_fixed');
+  q('tier-area').style.display=h?'block':'none';
+  const hint=document.getElementById('tier-hint');
+  if(hint)hint.textContent=isFixed?'Tiers: Revenue From → To → Fixed ฿ Amount':'Tiers: Revenue From → To → Rate %';
+  if(h&&!document.querySelector('.tier-row')){
+    if(isFixed)renderTiers([{f:0,t:399999,r:700},{f:400000,t:799999,r:1000},{f:800000,t:9999999,r:1500}]);
+    else renderTiers([{f:0,t:399999,r:1.5},{f:400000,t:799999,r:2},{f:800000,t:9999999,r:2.5}]);
+  }
+}
 function renderTiers(tiers){q('tier-rows').innerHTML='';tiers.forEach(t=>{const d=document.createElement('div');d.className='tier-row';d.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:6px';d.innerHTML='<input type="number" value="'+t.f+'" class="tf" placeholder="From" style="font-size:12px;flex:1"><input type="number" value="'+(t.t===9999999?'':t.t)+'" class="tt" placeholder="To" style="font-size:12px;flex:1"><input type="number" value="'+t.r+'" class="trr" step="0.1" placeholder="%" style="font-size:12px;width:65px"><button class="btn bo bsm" style="padding:3px 7px" type="button">×</button>';d.querySelector('button').addEventListener('click',()=>d.remove());q('tier-rows').appendChild(d);});}
 function addTierRow(){const d=document.createElement('div');d.className='tier-row';d.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:6px';d.innerHTML='<input type="number" class="tf" placeholder="From" style="font-size:12px;flex:1"><input type="number" class="tt" placeholder="To" style="font-size:12px;flex:1"><input type="number" class="trr" step="0.1" placeholder="%" style="font-size:12px;width:65px"><button class="btn bo bsm" style="padding:3px 7px" type="button">×</button>';d.querySelector('button').addEventListener('click',()=>d.remove());q('tier-rows').appendChild(d);}
 function getTiers(){return[...document.querySelectorAll('.tier-row')].map(r=>({f:parseFloat(r.querySelector('.tf').value)||0,t:parseFloat(r.querySelector('.tt').value)||9999999,r:parseFloat(r.querySelector('.trr').value)||0})).filter(t=>t.r>0)}
