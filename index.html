@@ -335,7 +335,7 @@ input:checked+.slider:before{transform:translateX(18px)}
   </div>
   <div class="ts tm" style="margin-bottom:8px">Check "Dil?" for เบี้ยขยัน items — gets a monthly on/off toggle in payroll.</div>
   <table class="itbl"><thead><tr><th style="width:26%">Item Name</th><th style="width:24%">Type</th><th style="width:18%">Value</th><th style="width:12%">WHT?</th><th style="width:12%">Dil?</th><th style="width:8%"></th></tr></thead><tbody id="items-body"></tbody></table>
-  <div id="tier-area" style="display:none;margin-top:9px">
+  <div id="tier-area" style="display:none!important;margin-top:9px">
     <div class="ts tm" style="margin-bottom:6px">Commission tiers (from → to → rate%)</div>
     <div id="tier-rows"></div>
     <button class="btn bo bsm mt8" id="btn-atier"><i class="ti ti-plus"></i>Add Tier</button>
@@ -611,28 +611,89 @@ function addItemWith(item){
   const names=C.itemNames||[];const cur=item?item.name||'':'';
   const nO=names.map(n=>'<option value="'+n+'"'+(cur===n?' selected':'')+'>'+n+'</option>').join('');
   const tO=Object.entries(ITYPES).map(([k,v])=>'<option value="'+k+'"'+(item&&item.type===k?' selected':'')+'>'+v+'</option>').join('');
+  const isTieredType=item&&isTiered(item.type);
+  const isFixedType=item&&item.type==='comm_tiered_fixed';
   tr.innerHTML='<td><select class="insel" style="font-size:12px">'+nO+'</select><input type="text" class="incus" placeholder="Name..." style="font-size:12px;margin-top:3px;display:'+(cur==='อื่นๆ'?'block':'none')+'" value=""></td><td><select class="itype" style="font-size:12px">'+tO+'</select></td><td><input type="number" step="0.01" placeholder="Value" value="'+(item?item.val||'':'')+'" class="ival" style="font-size:12px"></td><td style="text-align:center"><input type="checkbox" class="iwht"'+(item&&item.isWHT?' checked':'')+' style="width:15px;height:15px;accent-color:var(--nv)"></td><td style="text-align:center"><input type="checkbox" class="idil"'+(item&&item.isDiligence?' checked':'')+' style="width:15px;height:15px;accent-color:var(--nv)"></td><td><button class="btn bo bsm" style="padding:3px 7px" type="button">×</button></td>';
-  tr.querySelector('.insel').addEventListener('change',function(){const c=tr.querySelector('.incus');if(c)c.style.display=this.value==='อื่นๆ'?'block':'none';checkTA();});
-  tr.querySelector('.itype').addEventListener('change',checkTA);
-  tr.querySelector('button').addEventListener('click',()=>{tr.remove();checkTA();});
-  tb.appendChild(tr);checkTA();
-}
-function checkTA(){
-  const types=[...q('items-body').querySelectorAll('.itype')].map(el=>el.value);
-  const h=types.some(t=>isTiered(t));
-  const isFixed=types.some(t=>t==='comm_tiered_fixed');
-  q('tier-area').style.display=h?'block':'none';
-  const hint=document.getElementById('tier-hint');
-  if(hint)hint.textContent=isFixed?'Tiers: Revenue From → To → Fixed ฿ Amount':'Tiers: Revenue From → To → Rate %';
-  if(h&&!document.querySelector('.tier-row')){
-    if(isFixed)renderTiers([{f:0,t:399999,r:700},{f:400000,t:799999,r:1000},{f:800000,t:9999999,r:1500}]);
-    else renderTiers([{f:0,t:399999,r:1.5},{f:400000,t:799999,r:2},{f:800000,t:9999999,r:2.5}]);
+  // Tier sub-row — spans all columns
+  const tierTr=document.createElement('tr');
+  tierTr.className='tier-sub-row';
+  tierTr.style.display=isTieredType?'':'none';
+  const placeholder=isFixedType?'Fixed ฿':'Rate %';
+  const hint=isFixedType?'Revenue From → To → Fixed ฿ Amount':'Revenue From → To → Rate %';
+  tierTr.innerHTML='<td colspan="6" style="padding:4px 4px 10px 16px"><div class="ts tm" style="margin-bottom:5px;font-weight:600" id="hint-'+Math.random().toString(36).slice(2,6)+'">'+hint+'</div><div class="tier-rows-inner" style="margin-bottom:5px"></div><button class="btn bo bsm add-tier-btn" type="button"><i class="ti ti-plus"></i>Add Tier</button></td>';
+  // Populate existing tiers
+  if(item&&item.tiers&&item.tiers.length){
+    item.tiers.forEach(t=>addTierToRow(tierTr,t,isFixedType));
+  }
+  // Wire up type change to show/hide tier sub-row and update hint
+  tr.querySelector('.itype').addEventListener('change',function(){
+    const isT=isTiered(this.value);
+    const isF=this.value==='comm_tiered_fixed';
+    tierTr.style.display=isT?'':'none';
+    const hintEl=tierTr.querySelector('.ts.tm');
+    if(hintEl)hintEl.textContent=isF?'Revenue From → To → Fixed ฿ Amount':'Revenue From → To → Rate %';
+    const phEl=tierTr.querySelectorAll('.trr');
+    phEl.forEach(el=>el.placeholder=isF?'Fixed ฿':'Rate %');
+    if(isT&&!tierTr.querySelectorAll('.tier-row-inner').length){
+      if(isF)([{f:0,t:399999,r:700},{f:400000,t:799999,r:1000},{f:800000,t:9999999,r:1500}]).forEach(t=>addTierToRow(tierTr,t,true));
+      else([{f:0,t:399999,r:1.5},{f:400000,t:799999,r:2},{f:800000,t:9999999,r:2.5}]).forEach(t=>addTierToRow(tierTr,t,false));
+    }
+  });
+  tr.querySelector('.insel').addEventListener('change',function(){const c=tr.querySelector('.incus');if(c)c.style.display=this.value==='อื่นๆ'?'block':'none';});
+  tr.querySelector('button').addEventListener('click',()=>{tr.remove();tierTr.remove();});
+  tierTr.querySelector('.add-tier-btn').addEventListener('click',()=>{
+    const isF=tr.querySelector('.itype').value==='comm_tiered_fixed';
+    addTierToRow(tierTr,null,isF);
+  });
+  tb.appendChild(tr);
+  tb.appendChild(tierTr);
+  // Pre-populate default tiers if new tiered item with no tiers
+  if(isTieredType&&(!item.tiers||!item.tiers.length)){
+    if(isFixedType)([{f:0,t:399999,r:700},{f:400000,t:799999,r:1000},{f:800000,t:9999999,r:1500}]).forEach(t=>addTierToRow(tierTr,t,true));
+    else([{f:0,t:399999,r:1.5},{f:400000,t:799999,r:2},{f:800000,t:9999999,r:2.5}]).forEach(t=>addTierToRow(tierTr,t,false));
   }
 }
+
+function addTierToRow(tierTr,tier,isFixed){
+  const container=tierTr.querySelector('.tier-rows-inner');
+  const d=document.createElement('div');
+  d.className='tier-row-inner';
+  d.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:5px';
+  d.innerHTML='<input type="number" value="'+(tier?tier.f||0:0)+'" class="tf" placeholder="From ฿" style="font-size:12px;flex:1;padding:4px 6px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">'+
+    '<input type="number" value="'+(tier&&tier.t!==9999999?tier.t:'')+'" class="tt" placeholder="To ฿" style="font-size:12px;flex:1;padding:4px 6px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">'+
+    '<input type="number" value="'+(tier?tier.r||'':'')+'" class="trr" step="0.01" placeholder="'+(isFixed?'Fixed ฿':'Rate %')+'" style="font-size:12px;width:80px;padding:4px 6px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">'+
+    '<button type="button" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--color-text-secondary);padding:2px 5px">×</button>';
+  d.querySelector('button').addEventListener('click',()=>d.remove());
+  container.appendChild(d);
+}
+function checkTA(){/* tiers now handled per-item row */}
 function renderTiers(tiers){q('tier-rows').innerHTML='';tiers.forEach(t=>{const d=document.createElement('div');d.className='tier-row';d.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:6px';d.innerHTML='<input type="number" value="'+t.f+'" class="tf" placeholder="From" style="font-size:12px;flex:1"><input type="number" value="'+(t.t===9999999?'':t.t)+'" class="tt" placeholder="To" style="font-size:12px;flex:1"><input type="number" value="'+t.r+'" class="trr" step="0.1" placeholder="%" style="font-size:12px;width:65px"><button class="btn bo bsm" style="padding:3px 7px" type="button">×</button>';d.querySelector('button').addEventListener('click',()=>d.remove());q('tier-rows').appendChild(d);});}
 function addTierRow(){const d=document.createElement('div');d.className='tier-row';d.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:6px';d.innerHTML='<input type="number" class="tf" placeholder="From" style="font-size:12px;flex:1"><input type="number" class="tt" placeholder="To" style="font-size:12px;flex:1"><input type="number" class="trr" step="0.1" placeholder="%" style="font-size:12px;width:65px"><button class="btn bo bsm" style="padding:3px 7px" type="button">×</button>';d.querySelector('button').addEventListener('click',()=>d.remove());q('tier-rows').appendChild(d);}
 function getTiers(){return[...document.querySelectorAll('.tier-row')].map(r=>({f:parseFloat(r.querySelector('.tf').value)||0,t:parseFloat(r.querySelector('.tt').value)||9999999,r:parseFloat(r.querySelector('.trr').value)||0})).filter(t=>t.r>0)}
-function getItems(){const tiers=getTiers();return[...q('items-body').querySelectorAll('tr')].map(tr=>{const sel=tr.querySelector('.insel'),cus=tr.querySelector('.incus');let name=sel?sel.value:'';if(name==='อื่นๆ'&&cus&&cus.value.trim())name=cus.value.trim();const type=tr.querySelector('.itype').value;return{id:'i'+Date.now()+Math.random().toString(36).slice(2,5),name,type,val:parseFloat(tr.querySelector('.ival').value)||0,isWHT:tr.querySelector('.iwht').checked,isDiligence:tr.querySelector('.idil').checked,tiers:isTiered(type)?tiers:[]};}).filter(x=>x.name&&x.name!=='อื่นๆ');}
+function getItems(){
+  const rows=[...q('items-body').querySelectorAll('tr:not(.tier-sub-row)')];
+  return rows.map(tr=>{
+    const sel=tr.querySelector('.insel'),cus=tr.querySelector('.incus');
+    let name=sel?sel.value:'';
+    if(name==='อื่นๆ'&&cus&&cus.value.trim())name=cus.value.trim();
+    const type=tr.querySelector('.itype').value;
+    // Get tiers from the NEXT sibling tier-sub-row
+    const tierTr=tr.nextElementSibling;
+    let tiers=[];
+    if(isTiered(type)&&tierTr&&tierTr.classList.contains('tier-sub-row')){
+      tiers=[...tierTr.querySelectorAll('.tier-row-inner')].map(r=>({
+        f:parseFloat(r.querySelector('.tf').value)||0,
+        t:parseFloat(r.querySelector('.tt').value)||9999999,
+        r:parseFloat(r.querySelector('.trr').value)||0
+      })).filter(t=>t.r>0);
+    }
+    return{id:'i'+Date.now()+Math.random().toString(36).slice(2,5),name,type,
+      val:parseFloat(tr.querySelector('.ival').value)||0,
+      isWHT:tr.querySelector('.iwht').checked,
+      isDiligence:tr.querySelector('.idil').checked,
+      tiers};
+  }).filter(x=>x.name&&x.name!=='อื่นๆ');
+}
 function saveStaff(){
   const et=qv('s-emptype'),brTxt=qv('s-br-txt').trim(),mb=B.find(x=>x.name===brTxt);
   const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:qv('s-ct'),st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0};
