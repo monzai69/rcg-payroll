@@ -410,6 +410,9 @@ function ld(){
   if(!Array.isArray(C.depts))C.depts=['Marketing','Operation','CEO','COO'];
   if(!Array.isArray(C.itemNames))C.itemNames=['ค่ามือ','เบี้ยขยัน','ค่าตำแหน่ง','Incentive','Support','Commission','อื่นๆ'];
   if(!B.length)seedB();if(!S.length)seedS();
+  // Migration: ensure all staff have required fields
+  S=S.map(s=>({st:'Active',emptype:'fulltime',wht:3,items:[],...s}));
+  svS();
 }
 const sv=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 const svS=()=>sv(SK,S),svP=()=>sv(PK,P),svC=()=>sv(CK,C),svA=()=>sv(AK,A),svAP=()=>sv(APK,AP),svB=()=>sv(BK,B);
@@ -535,19 +538,21 @@ function openAdd(){
   popDeptDl();popBrDl();syncS();openM('sm');
 }
 function openEdit(id){
-  const s=S.find(x=>x.id===id);if(!s)return;
+try{
+  const s=S.find(x=>x.id===id);if(!s){console.error('openEdit: staff not found',id,'S=',S.map(x=>x.id));return;}
   _eSid=id;
   q('sm-title').textContent='Edit — '+s.nn+' '+s.fn;
   q('btn-del-staff').style.display='inline-flex';
   q('s-fn').value=s.fn||'';q('s-ln').value=s.ln||'';q('s-nn').value=s.nn||'';q('s-eid').value=s.id||'';
   q('s-pos').value=s.pos||'';q('s-sd').value=s.sd||'';q('s-dept').value=s.dept||'';
-  const bObj=B.find(x=>x.id===s.br);q('s-br-txt').value=bObj?bObj.name:(s.br||'');
+  try{const bObj=B.find(x=>x.id===s.br);q('s-br-txt').value=bObj?bObj.name:(s.br||'');}catch(e){}
   q('s-emptype').value=s.emptype||'fulltime';q('s-ct').value=s.ct||'permanent';q('s-st').value=s.st||'Active';
   q('s-base').value=s.base||'';q('s-ex').value=s.ex||0;q('s-otrate').value=s.otrate||0;
   q('s-hrrate').value=s.hrrate||'';q('s-stdhrs').value=s.stdhrs||'';q('s-fptmethod').value=s.fptmethod||'hourly';q('s-fptdayrate').value=s.fptdayrate||'';
   q('s-pttype').value=s.pttype||'parttime';q('s-dhrrate').value=s.hrrate||'';q('s-dhrs').value=s.dhrs||7;q('s-df').value=s.df||'';q('s-dayrate').value=s.dayrate||'';
   q('items-body').innerHTML='';(s.items||[]).forEach(addItemWith);checkTA();
   popDeptDl();popBrDl();syncS();openM('sm');
+}catch(err){console.error('openEdit error:',err);alert('Edit error: '+err.message);}
 }
 q('btn-add-staff').addEventListener('click',openAdd);
 q('btn-cancel-staff').addEventListener('click',()=>closeM('sm'));
