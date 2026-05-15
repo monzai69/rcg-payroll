@@ -439,18 +439,28 @@ const MTH=['January','February','March','April','May','June','July','August','Se
 function isTiered(t){return t==='comm_tiered'||t==='comm_tiered_fixed';}
 
 function calcM(s,e,key){
-  const isPerm=s.ct==='permanent',whtR=(parseFloat(C.wht)||3)/100,iWhtR=(parseFloat(s.wht)||3)/100;
+  // Use snapshot if saved, otherwise use live staff profile
+  const snap=e&&e.snap;
+  const base=snap?snap.base:s.base;
+  const hrrate=snap?snap.hrrate:s.hrrate;
+  const fptdayrate=snap?snap.fptdayrate:s.fptdayrate;
+  const otrate=snap?snap.otrate:s.otrate;
+  const ct=snap?snap.ct:s.ct;
+  const emptype=snap?snap.emptype:s.emptype;
+  const fptmethod=snap?snap.fptmethod:s.fptmethod;
+  const items=snap?snap.items:s.items;
+  const isPerm=ct==='permanent',whtR=(parseFloat(C.wht)||3)/100,iWhtR=(parseFloat(s.wht)||3)/100;
   let bG=0,bLabel='';
-  if(s.emptype==='fulltime'){bG=parseFloat(s.base)||0;bLabel='Base '+fmt(bG)+'฿';}
-  else if(s.emptype==='fullparttime'){
-    if(s.fptmethod==='daily'){const d=parseFloat(e.days)||0,r=parseFloat(s.fptdayrate)||0;bG=d*r;bLabel=d+'d × '+fmt(r)+'฿';}
-    else{const h=parseFloat(e.hours)||0,r=parseFloat(s.hrrate)||0;bG=h*r;bLabel=h+'hrs × '+fmt(r)+'฿';}
+  if(emptype==='fulltime'){bG=parseFloat(base)||0;bLabel='Base '+fmt(bG)+'฿';}
+  else if(emptype==='fullparttime'){
+    if(fptmethod==='daily'){const d=parseFloat(e.days)||0,r=parseFloat(fptdayrate)||0;bG=d*r;bLabel=d+'d × '+fmt(r)+'฿';}
+    else{const h=parseFloat(e.hours)||0,r=parseFloat(hrrate)||0;bG=h*r;bLabel=h+'hrs × '+fmt(r)+'฿';}
   }
   const rev=parseFloat(e.rev)||0,mkt=parseFloat(e.mkt)||0;
-  const otH=parseFloat(e.otHrs)||0,otA=otH*(parseFloat(s.otrate)||0);
+  const otH=parseFloat(e.otHrs)||0,otA=otH*(parseFloat(otrate)||0);
   const bon=parseFloat(e.bonus)||0,dL=parseFloat(e.dLa)||0,dO=parseFloat(e.dOth)||0;
   let rows=[],gI=0,kT=0;
-  (s.items||[]).forEach(item=>{
+  (items||[]).forEach(item=>{
     if(item.isDiligence&&!(e.diligence&&e.diligence[item.id]))return;
     const gross=evalItem(item,rev,mkt,e);
     const isK=['ค่ามือ','Commission','DF (Doctor Fee)'].includes(item.name);
@@ -748,7 +758,27 @@ function gatherE(sid){const gval=id=>{const el=q(id+'-'+sid);return el?parseFloa
 function uc(sid,key){const s=S.find(x=>x.id===sid);if(!s)return;const e=gatherE(sid);if(!P[key])P[key]={};if(P[key][sid]&&P[key][sid].diligence)e.diligence=P[key][sid].diligence;const c=calcM(s,e,key);e.net=c.net;P[key][sid]=e;const el=q('snet-'+sid);if(el)el.textContent=fmt(c.net)+' ฿';const ae=q('acct-'+sid);if(ae)ae.innerHTML=buildAcct(s,c);const done=isDone(s,e);const sp=q('spc-'+sid);if(sp)sp.classList.toggle('done',done);const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');updJump(act,key);updTopbar(act,key);}
 function updTopbar(act,key){const dc=act.filter(s=>isDone(s,P[key]&&P[key][s.id]||{})).length;const tn=act.reduce((a,s)=>{const e=P[key]&&P[key][s.id]||{};return a+calcM(s,e,key).net},0);const pct=act.length?Math.round(dc/act.length*100):0;q('pay-topbar').innerHTML='<div class="g4" style="margin-bottom:10px"><div class="sc"><div class="sl">Filled in</div><div class="sv" style="color:var(--ok)">'+dc+' / '+act.length+'</div></div><div class="sc"><div class="sl">Total Net Pay</div><div class="sv" style="color:var(--nv)">'+fmt(tn)+' ฿</div></div><div class="sc"><div class="sl">Total SSO</div><div class="sv">'+fmt(act.filter(s=>s.ct==='permanent').reduce((a,s)=>{const e=P[key]&&P[key][s.id]||{};return a+calcM(s,e,key).sso},0))+' ฿</div></div><div class="sc"><div class="sl">Tax ภงด.1</div><div class="sv">'+fmt(act.filter(s=>s.ct==='permanent').reduce((a,s)=>{const e=P[key]&&P[key][s.id]||{};return a+calcM(s,e,key).mT},0))+' ฿</div></div></div><div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>';}
 function updJump(act,key){q('jump-list').innerHTML=act.map(s=>{const e=P[key]&&P[key][s.id]||{},d=isDone(s,e);return'<div class="ji'+(d?' done':'')+'" onclick="document.getElementById(\'spc-'+s.id+'\').scrollIntoView({behavior:\'smooth\',block:\'start\'})"><div class="jdot"></div><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.nn+'</span></div>';}).join('');}
-function saveAll(){const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);if(!P[key])P[key]={};S.filter(s=>s.st==='Active'&&s.emptype!=='parttime').forEach(s=>{const e=gatherE(s.id);if(P[key][s.id]&&P[key][s.id].diligence)e.diligence=P[key][s.id].diligence;const c=calcM(s,e,key);e.net=c.net;P[key][s.id]=e});svP();alert('Saved ✓');}
+function saveAll(){
+  const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);
+  if(!P[key])P[key]={};
+  S.filter(s=>s.st==='Active'&&s.emptype!=='parttime').forEach(s=>{
+    const e=gatherE(s.id);
+    if(P[key][s.id]&&P[key][s.id].diligence)e.diligence=P[key][s.id].diligence;
+    // ── SNAPSHOT: lock salary at save time so history never changes ──
+    e.snap={
+      base:s.base||0,
+      hrrate:s.hrrate||0,
+      fptdayrate:s.fptdayrate||0,
+      otrate:s.otrate||0,
+      ct:s.ct,
+      emptype:s.emptype,
+      fptmethod:s.fptmethod||'hourly',
+      items:JSON.parse(JSON.stringify(s.items||[]))
+    };
+    const c=calcM(s,e,key);e.net=c.net;P[key][s.id]=e;
+  });
+  svP();alert('Saved ✓ — salaries locked for this period.');
+}
 function doExport(){saveAll();const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);const rows=[['Nickname','Name','Dept','Branch','Base','Items','OT','Bonus','SSO','Tax','WHT','Leave','Advance','Other','Net','Revenue','ค่ามือ']];S.filter(s=>s.st==='Active'&&s.emptype!=='parttime').forEach(s=>{const e=P[key]&&P[key][s.id]||{};const c=calcM(s,e,key);rows.push([s.nn,s.fn+' '+s.ln,s.dept,brN(s.br),c.bG,Math.round(c.gI),Math.round(c.otA),c.bon,Math.round(c.sso),Math.round(c.mT),Math.round(c.whtD),c.dL,c.adv,c.dO,Math.round(c.net),c.rev,Math.round(c.kT)])});const csv=rows.map(r=>r.join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='RCG_Payroll_'+y+'_'+m+'.csv';a.click();}
 
 function rAPsel(){q('apf-s').innerHTML='<option value="">All</option>';S.filter(s=>s.st==='Active'&&s.emptype==='parttime').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn+' ('+s.pos+')';q('apf-s').appendChild(o)});}
