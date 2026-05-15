@@ -89,8 +89,8 @@ input:checked+.slider:before{transform:translateX(18px)}
 .progress-bar{height:5px;background:#f0f0f0;border-radius:3px;margin-bottom:16px;overflow:hidden}
 .progress-fill{height:100%;background:var(--ok);border-radius:3px;transition:width .4s}
 .pay-layout{display:flex;gap:14px;align-items:flex-start}
-.pay-jump{width:152px;min-width:152px;position:sticky;top:0}
-.pay-jump-inner{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px;max-height:80vh;overflow-y:auto}
+.pay-jump{width:152px;min-width:152px;position:sticky;top:16px;align-self:flex-start}
+.pay-jump-inner{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px;max-height:calc(100vh - 80px);overflow-y:auto}
 .pay-jump-title{font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px}
 .ji{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:12px;margin-bottom:2px;color:#374151}
 .ji:hover{background:#f9fafb}
