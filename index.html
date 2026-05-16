@@ -462,18 +462,31 @@ function calcM(s,e,key){
   const rev=parseFloat(e.rev)||0,mkt=parseFloat(e.mkt)||0;
   const otH=parseFloat(e.otHrs)||0,otA=otH*(parseFloat(otrate)||0);
   const bon=parseFloat(e.bonus)||0,dO=parseFloat(e.dOth)||0;
-  // Leave deduction — calculated BEFORE gross (reduces base before tax/SSO)
+  // ── LEAVE DEDUCTION ──────────────────────────────────────
+  // Never round mid-calculation — only round at final display
   const dept=getDept(s.dept);
   const workDays=parseFloat(e.periodDays)||dept.days||26;
   const workHrs=dept.hrs||9;
   const leaveDays=parseFloat(e.leaveDays)||0;
   const leaveHrs=parseFloat(e.leaveHrs)||0;
-  const leaveBaseForCalc=s.emptype==='fulltime'?(parseFloat(base)||0):0;
-  const dailyRate=workDays>0?leaveBaseForCalc/workDays:0;
-  const hourlyRate=workHrs>0?dailyRate/workHrs:0;
-  const dL=Math.round(((leaveDays*dailyRate)+(leaveHrs*hourlyRate))*100)/100;
-  // Effective base after leave deduction
-  const effBase=Math.max(0,(parseFloat(base)||0)-dL);
+  const totalLeaveHrs=(leaveDays*workHrs)+leaveHrs;  // e.g. 1d×9hrs + 2hrs = 11hrs
+
+  // Base leave: base ÷ workDays ÷ workHrs × totalLeaveHrs (full precision)
+  const baseForLeave=(s.emptype==='fulltime'||s.emptype==='fullparttime')?(parseFloat(base)||0):0;
+  const dailyRate=workDays>0?baseForLeave/workDays:0;           // exact, no rounding
+  const hourlyRate=workDays>0&&workHrs>0?baseForLeave/workDays/workHrs:0; // exact
+  const dLbase=totalLeaveHrs>0?hourlyRate*totalLeaveHrs:0;      // exact, no rounding
+
+  // Fixed items leave: fixedTotal ÷ workDays ÷ workHrs × totalLeaveHrs
+  const fixedItemsTotal=(items||[]).filter(i=>i.type==='fixed'&&!i.isDiligence)
+    .reduce((t,i)=>t+(parseFloat(i.val)||0),0);
+  const dLitems=totalLeaveHrs>0&&workDays>0&&workHrs>0
+    ?(fixedItemsTotal/workDays/workHrs*totalLeaveHrs):0;         // exact, no rounding
+
+  const dL=dLbase+dLitems;  // total leave (exact)
+
+  // Effective base = base − base leave (SSO/tax calculated on this)
+  const effBase=Math.max(0,(parseFloat(base)||0)-dLbase);
   let rows=[],gI=0,kT=0;
   (items||[]).forEach(item=>{
     if(item.isDiligence&&!(e.diligence&&e.diligence[item.id]))return;
@@ -482,16 +495,16 @@ function calcM(s,e,key){
     if(item.isWHT){const wht=gross*iWhtR;rows.push({name:item.name,net:gross-wht,isWHT:true,isDiligence:!!item.isDiligence});gI+=gross-wht;if(isK)kT+=gross-wht;}
     else{rows.push({name:item.name,net:gross,isWHT:false,isDiligence:!!item.isDiligence});gI+=gross;if(isK)kT+=gross;}
   });
-  const gross=effBase+gI+otA+bon;
+  const gross=effBase+(gI-dLitems)+otA+bon;
   const adv=key?A.filter(a=>a.staffId===s.id&&a.key===key&&a.status==='pending').reduce((t,a)=>t+(parseFloat(a.amt)||0),0):0;
   if(isPerm){
     const ssoBase=Math.min(effBase,parseFloat(C.ssoC)||17500),sso=ssoBase*((parseFloat(C.sso)||5)/100);
     const aN=Math.max(0,gross*12-Math.min(gross*12*.5,parseFloat(C.d50)||100000)-(parseFloat(C.pers)||60000)-sso*12-(parseFloat(s.ex)||0));
     const aT=pit(aN),mT=aT/12;
-    return{bG,bLabel,otA,otH,bon,gI,rows,sso,mT,aT,dL,dO,adv,gross,net:gross-sso-mT-dO-adv,isPerm,whtD:0,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase};
+    return{bG,bLabel,otA,otH,bon,gI,rows,sso,mT,aT,dL,dO,adv,gross,net:gross-sso-mT-dO-adv,isPerm,whtD:0,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,leaveHrs,effBase,dLbase,dLitems};
   }else{
     const whtD=gross*whtR;
-    return{bG,bLabel,otA,otH,bon,gI,rows,sso:0,mT:0,aT:0,dL,dO,adv,gross,net:gross-whtD-dO-adv,isPerm,whtD,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase};
+    return{bG,bLabel,otA,otH,bon,gI,rows,sso:0,mT:0,aT:0,dL,dO,adv,gross,net:gross-whtD-dO-adv,isPerm,whtD,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase,dLbase,dLitems};
   }
 }
 
@@ -778,16 +791,17 @@ function buildAcct(s,c){
   let h='<div class="acct"><div class="ar sh">Income</div>';
   h+='<div class="ar"><span class="lbl">Base Salary</span><span class="amt">'+fmt(c.bG)+' ฿</span></div>';
   if(c.dL>0){
-    h+='<div class="ar ded"><span class="lbl">Leave ('+fmt(c.leaveDays)+'d + '+fmt(c.leaveHrs)+'hrs)</span><span class="amt">−'+fmt(c.dL)+' ฿</span></div>';
-    h+='<div class="ar" style="font-size:11px"><span class="lbl" style="color:#6b7280">Effective Base</span><span class="amt" style="font-size:11px">'+fmt(c.effBase)+' ฿</span></div>';
+    h+='<div class="ar ded"><span class="lbl">Leave − Base ('+fmt(c.leaveDays)+'d '+fmt(c.leaveHrs)+'hrs)</span><span class="amt">−'+fmt(c.dLbase)+' ฿</span></div>';
+    if(c.dLitems>0)h+='<div class="ar ded"><span class="lbl">Leave − Fixed Items</span><span class="amt">−'+fmt(c.dLitems)+' ฿</span></div>';
+    h+='<div class="ar" style="font-size:11px;background:var(--color-background-secondary)"><span class="lbl" style="color:#6b7280;font-weight:600">Effective Base (after leave)</span><span class="amt" style="font-size:12px;font-weight:600">'+fmt(c.effBase)+' ฿</span></div>';
   }
   c.rows.forEach(r=>{h+='<div class="ar"><span class="lbl">'+r.name+(r.isWHT?' (after WHT)':'')+'</span><span class="amt">'+fmt(r.net)+' ฿</span></div>';});
   if(c.otA>0)h+='<div class="ar"><span class="lbl">OT ('+c.otH+'hrs)</span><span class="amt">'+fmt(c.otA)+' ฿</span></div>';
   if(c.bon>0)h+='<div class="ar"><span class="lbl">Bonus</span><span class="amt">'+fmt(c.bon)+' ฿</span></div>';
   h+='<div class="ar sub"><span class="lbl">Gross Income</span><span class="amt">'+fmt(c.gross)+' ฿</span></div><div class="ar sh">Deductions</div>';
-  if(s.ct==='permanent'){h+='<div class="ar ded"><span class="lbl">SSO (5% × '+fmt(c.bG)+' ฿)</span><span class="amt">−'+fmt(c.sso)+' ฿</span></div>';if(c.mT>0)h+='<div class="ar ded"><span class="lbl">Income Tax ภงด.1</span><span class="amt">−'+fmt(c.mT)+' ฿</span></div>';}
+  if(s.ct==='permanent'){h+='<div class="ar ded"><span class="lbl">SSO (5% × '+fmt(c.effBase||c.bG)+' ฿)</span><span class="amt">−'+fmt(c.sso)+' ฿</span></div>';if(c.mT>0)h+='<div class="ar ded"><span class="lbl">Income Tax ภงด.1</span><span class="amt">−'+fmt(c.mT)+' ฿</span></div>';}
   else h+='<div class="ar ded"><span class="lbl">WHT '+(C.wht||3)+'%</span><span class="amt">−'+fmt(c.whtD)+' ฿</span></div>';
-  if(c.dL>0)h+='<div class="ar ded"><span class="lbl">Leave</span><span class="amt">−'+fmt(c.dL)+' ฿</span></div>';
+  // Leave already shown before gross above
   if(c.adv>0)h+='<div class="ar ded"><span class="lbl">Advance</span><span class="amt">−'+fmt(c.adv)+' ฿</span></div>';
   if(c.dO>0)h+='<div class="ar ded"><span class="lbl">Other</span><span class="amt">−'+fmt(c.dO)+' ฿</span></div>';
   h+='<div class="ar net"><span class="lbl">NET PAY</span><span class="amt">'+fmt(c.net)+' ฿</span></div></div>';
