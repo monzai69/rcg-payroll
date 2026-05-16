@@ -254,7 +254,7 @@ input:checked+.slider:before{transform:translateX(18px)}
   <div class="card" style="margin-bottom:14px">
     <div class="fx jb ic" style="margin-bottom:12px"><div class="st" style="margin:0;border:none;padding:0">Departments</div>
       <div class="fx g8 ic"><input type="text" id="new-dept" placeholder="New department..." style="width:160px;padding:5px 8px;font-size:12px"><button class="btn bp bsm" id="btn-adept"><i class="ti ti-plus"></i>Add</button></div>
-    </div><div id="dept-chips"></div>
+    </div><div class="ts tm" style="margin-bottom:8px;font-size:11px">Set working days/month and hours/day per department — used for leave deduction calculation.</div><div id="dept-chips"></div>
   </div>
   <div class="card" style="margin-bottom:14px">
     <div class="fx jb ic" style="margin-bottom:12px"><div class="st" style="margin:0;border:none;padding:0">Standard Pay Item Names</div>
@@ -406,8 +406,11 @@ function ld(){
   try{A=JSON.parse(localStorage.getItem(AK)||'[]')}catch{A=[]}
   try{AP=JSON.parse(localStorage.getItem(APK)||'[]')}catch{AP=[]}
   try{B=JSON.parse(localStorage.getItem(BK)||'[]')}catch{B=[]}
-  C=Object.assign({cth:'บริษัท เรดี้ เช็ค โก กรุ๊ป จำกัด',addr:'496/14 ถนนสาธุประดิษฐ์ แขวงบางโพงพาง เขตยานนาวา กรุงเทพฯ 10120',sgn:'สมน สถิตยางกูร (ผู้บริหารการเงิน)',sso:5,ssoC:17500,wht:3,d50:100000,pers:60000,depts:['Marketing','Operation','CEO','COO','Admin','HR'],itemNames:['ค่ามือ','เบี้ยขยัน','ค่าตำแหน่ง','Incentive','Support','Commission','DF (Doctor Fee)','โบนัส','รีวิว','อื่นๆ']},C);
-  if(!Array.isArray(C.depts))C.depts=['Marketing','Operation','CEO','COO'];
+  C=Object.assign({cth:'บริษัท เรดี้ เช็ค โก กรุ๊ป จำกัด',addr:'496/14 ถนนสาธุประดิษฐ์ แขวงบางโพงพาง เขตยานนาวา กรุงเทพฯ 10120',sgn:'สมน สถิตยางกูร (ผู้บริหารการเงิน)',sso:5,ssoC:17500,wht:3,d50:100000,pers:60000,depts:[{name:'CEO',days:26,hrs:9},{name:'COO',days:26,hrs:9},{name:'Marketing',days:22,hrs:9},{name:'Operation',days:26,hrs:9},{name:'Operation-Front',days:24,hrs:9},{name:'Admin',days:26,hrs:9},{name:'HR',days:26,hrs:9}],itemNames:['ค่ามือ','เบี้ยขยัน','ค่าตำแหน่ง','Incentive','Support','Commission','DF (Doctor Fee)','โบนัส','รีวิว','อื่นๆ']},C);
+  if(!Array.isArray(C.depts))C.depts=[{name:'Operation',days:26,hrs:9}];
+  // Migrate string depts to objects
+  if(C.depts.length&&typeof C.depts[0]==='string')
+    C.depts=C.depts.map(d=>({name:d,days:26,hrs:9}));
   if(!Array.isArray(C.itemNames))C.itemNames=['ค่ามือ','เบี้ยขยัน','ค่าตำแหน่ง','Incentive','Support','Commission','อื่นๆ'];
   if(!B.length)seedB();if(!S.length)seedS();
   // Migration: ensure all staff have required fields
@@ -458,7 +461,19 @@ function calcM(s,e,key){
   }
   const rev=parseFloat(e.rev)||0,mkt=parseFloat(e.mkt)||0;
   const otH=parseFloat(e.otHrs)||0,otA=otH*(parseFloat(otrate)||0);
-  const bon=parseFloat(e.bonus)||0,dL=parseFloat(e.dLa)||0,dO=parseFloat(e.dOth)||0;
+  const bon=parseFloat(e.bonus)||0,dO=parseFloat(e.dOth)||0;
+  // Leave deduction — calculated BEFORE gross (reduces base before tax/SSO)
+  const dept=getDept(s.dept);
+  const workDays=parseFloat(e.periodDays)||dept.days||26;
+  const workHrs=dept.hrs||9;
+  const leaveDays=parseFloat(e.leaveDays)||0;
+  const leaveHrs=parseFloat(e.leaveHrs)||0;
+  const leaveBaseForCalc=s.emptype==='fulltime'?(parseFloat(base)||0):0;
+  const dailyRate=workDays>0?leaveBaseForCalc/workDays:0;
+  const hourlyRate=workHrs>0?dailyRate/workHrs:0;
+  const dL=Math.round(((leaveDays*dailyRate)+(leaveHrs*hourlyRate))*100)/100;
+  // Effective base after leave deduction
+  const effBase=Math.max(0,(parseFloat(base)||0)-dL);
   let rows=[],gI=0,kT=0;
   (items||[]).forEach(item=>{
     if(item.isDiligence&&!(e.diligence&&e.diligence[item.id]))return;
@@ -467,16 +482,16 @@ function calcM(s,e,key){
     if(item.isWHT){const wht=gross*iWhtR;rows.push({name:item.name,net:gross-wht,isWHT:true,isDiligence:!!item.isDiligence});gI+=gross-wht;if(isK)kT+=gross-wht;}
     else{rows.push({name:item.name,net:gross,isWHT:false,isDiligence:!!item.isDiligence});gI+=gross;if(isK)kT+=gross;}
   });
-  const gross=bG+gI+otA+bon;
+  const gross=effBase+gI+otA+bon;
   const adv=key?A.filter(a=>a.staffId===s.id&&a.key===key&&a.status==='pending').reduce((t,a)=>t+(parseFloat(a.amt)||0),0):0;
   if(isPerm){
-    const ssoBase=Math.min(bG,parseFloat(C.ssoC)||17500),sso=ssoBase*((parseFloat(C.sso)||5)/100);
+    const ssoBase=Math.min(effBase,parseFloat(C.ssoC)||17500),sso=ssoBase*((parseFloat(C.sso)||5)/100);
     const aN=Math.max(0,gross*12-Math.min(gross*12*.5,parseFloat(C.d50)||100000)-(parseFloat(C.pers)||60000)-sso*12-(parseFloat(s.ex)||0));
     const aT=pit(aN),mT=aT/12;
-    return{bG,bLabel,otA,otH,bon,gI,rows,sso,mT,aT,dL,dO,adv,gross,net:gross-sso-mT-dL-dO-adv,isPerm,whtD:0,rev,kT};
+    return{bG,bLabel,otA,otH,bon,gI,rows,sso,mT,aT,dL,dO,adv,gross,net:gross-sso-mT-dO-adv,isPerm,whtD:0,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase};
   }else{
     const whtD=gross*whtR;
-    return{bG,bLabel,otA,otH,bon,gI,rows,sso:0,mT:0,aT:0,dL,dO,adv,gross,net:gross-whtD-dL-dO-adv,isPerm,whtD,rev,kT};
+    return{bG,bLabel,otA,otH,bon,gI,rows,sso:0,mT:0,aT:0,dL,dO,adv,gross,net:gross-whtD-dO-adv,isPerm,whtD,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase};
   }
 }
 
@@ -490,6 +505,8 @@ function avfg(d){return({Marketing:'#1e40af',Operation:'#9d174d',CEO:'#3730a3',C
 function tenure(sd){if(!sd)return'-';const s=new Date(sd),n=new Date();let y=n.getFullYear()-s.getFullYear(),mo=n.getMonth()-s.getMonth(),d=n.getDate()-s.getDate();if(d<0){mo--;d+=30}if(mo<0){y--;mo+=12}return y+'y '+mo+'m'}
 function thDate(ds){return ds?new Date(ds).toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'}):'-'}
 function mkKey(m,y){return y+'_'+m}
+function getDept(deptName){return (C.depts||[]).find(d=>(typeof d==='object'?d.name:d)===deptName)||{name:deptName,days:26,hrs:9};}
+function deptName(d){return typeof d==='object'?d.name:d;}
 function brN(id){const b=B.find(x=>x.id===id);return b?b.name:id||'-'}
 function brO(id){return B.find(x=>x.id===id)||{}}
 function empBadge(s){if(s.emptype==='fullparttime')return'<span class="badge bfptb">Full-PT</span>';if(s.emptype==='parttime')return'<span class="badge bdocb">'+(s.pttype==='doctor'?'Doctor':'Part-time')+'</span>';return'<span class="badge bft">Full-time</span>';}
@@ -510,7 +527,12 @@ function initSels(){
   q('dc-d').value=new Date().toISOString().split('T')[0];
   q('ap-date').value=new Date().toISOString().split('T')[0];
 }
-function popDeptDl(){q('dl-dept').innerHTML=(C.depts||[]).map(d=>'<option value="'+d+'">').join('');}
+function popDeptDl(){
+  const dl=document.getElementById('dl-dept');if(!dl)return;
+  dl.innerHTML=(C.depts||[]).map(d=>{const nm=typeof d==='object'?d.name:d;return'<option value="'+nm+'">'+nm+'</option>';}).join('');
+  const sel=q('s-dept');if(!sel)return;const cur=sel.value;
+  sel.innerHTML=(C.depts||[]).map(d=>{const nm=typeof d==='object'?d.name:d;return'<option value="'+nm+'"'+(cur===nm?' selected':'')+'>'+nm+'</option>';}).join('');
+}
 function popBrDl(){q('dl-br').innerHTML=B.map(b=>'<option value="'+b.name+'">').join('');if(q('dc-br'))q('dc-br').innerHTML=B.map(b=>'<option value="'+b.id+'">'+b.name+'</option>').join('');}
 function popDocSels(){const act=S.filter(s=>s.st==='Active');['ds-s','dc-s'].forEach(id=>{const el=q(id);if(!el)return;el.innerHTML='<option value="">-- Select --</option>';act.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn;el.appendChild(o)})});popBrDl();}
 
@@ -528,7 +550,7 @@ function rDash(){
   q('dash-p').textContent='Period: '+MTH[m-1]+' '+y;
   const entries=Object.values(P[key]||{});const total=entries.reduce((a,e)=>{const s=S.find(x=>x.id===e.sid);return s?a+calcM(s,e,key).net:a},0);
   q('dash-s').innerHTML='<div class="sc"><div class="sl">Active Staff</div><div class="sv">'+act.length+'</div></div><div class="sc"><div class="sl">Full-time</div><div class="sv" style="color:var(--ok)">'+act.filter(s=>s.emptype==='fulltime').length+'</div></div><div class="sc"><div class="sl">Total Net Pay</div><div class="sv" style="color:var(--nv)">'+fmt(total)+' ฿</div></div><div class="sc"><div class="sl">Pending Advance</div><div class="sv" style="color:#92400e">'+A.filter(a=>a.status==='pending').length+'</div></div>';
-  const dSel=q('dash-rev-dept');if(dSel){const cur=dSel.value;dSel.innerHTML='<option value="">All Depts</option>';(C.depts||[]).forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;dSel.appendChild(o)});if(cur)dSel.value=cur;}
+  const dSel=q('dash-rev-dept');if(dSel){const cur=dSel.value;dSel.innerHTML='<option value="">All Depts</option>';(C.depts||[]).forEach(d=>{const nm=typeof d==='object'?d.name:d;const o=document.createElement('option');o.value=nm;o.textContent=nm;dSel.appendChild(o)});if(cur)dSel.value=cur;}
   const all=act.filter(s=>s.emptype!=='parttime').map(s=>{const e=P[key]&&P[key][s.id]||{};const c=calcM(s,e,key);return{s,net:c.net,rev:parseFloat(e.rev)||0,kT:c.kT};});
   const bars=(data,color)=>data.length?data.map(d=>'<div class="chart-bar-wrap"><div class="cbl">'+d.s.nn+'</div><div class="cbt"><div class="cbf" style="width:'+(d.v/(data[0].v||1)*100).toFixed(1)+'%;background:'+color+'"><span class="cbv">'+fmt(d.v)+'฿</span></div></div></div>').join(''):'<div class="no-data" style="padding:16px">No data</div>';
   q('ch-cost').innerHTML=bars([...all].sort((a,b)=>b.net-a.net).slice(0,7).map(d=>({s:d.s,v:d.net})),'var(--nv)');
@@ -539,7 +561,7 @@ function rDash(){
 }
 q('dash-pm').addEventListener('change',rDash);q('dash-py').addEventListener('change',rDash);q('dash-rev-dept').addEventListener('change',rDash);
 
-function rDeptF(){q('sd').innerHTML='<option value="">All Departments</option>';(C.depts||[]).forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;q('sd').appendChild(o)});q('sbr').innerHTML='<option value="">All Branches</option>';B.forEach(b=>{const o=document.createElement('option');o.value=b.id;o.textContent=b.name;q('sbr').appendChild(o)});}
+function rDeptF(){q('sd').innerHTML='<option value="">All Departments</option>';(C.depts||[]).forEach(d=>{const nm=typeof d==='object'?d.name:d;const o=document.createElement('option');o.value=nm;o.textContent=nm;q('sd').appendChild(o)});q('sbr').innerHTML='<option value="">All Branches</option>';B.forEach(b=>{const o=document.createElement('option');o.value=b.id;o.textContent=b.name;q('sbr').appendChild(o)});}
 function rStaff(){
   const sq=qv('ss').toLowerCase(),df=qv('sd'),bf=qv('sbr'),tf=qv('stype');
   const f=S.filter(s=>{const nm=(s.nn+s.fn+s.ln).toLowerCase();return(!sq||nm.includes(sq))&&(!df||s.dept===df)&&(!bf||s.br===bf)&&(!tf||s.emptype===tf);});
@@ -742,11 +764,23 @@ function buildCard(s,e,key){
   else{if(hasRev)inc+='<div class="fbox rev"><label>📊 Revenue</label><input type="number" id="pr-rev-'+s.id+'" value="'+(e.rev||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';perIt.forEach(i=>{inc+='<div class="fbox rev"><label>🤝 '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';});if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs"></div>';inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';}
   inc+='</div>';
   let dil='';if(dilIt.length){dil='<div style="margin-bottom:12px">';dilIt.forEach(it=>{const on=e.diligence&&e.diligence[it.id];dil+='<div class="toggle-row'+(on?' on':'')+'" id="dr-'+s.id+'-'+it.id+'"><div><div style="font-size:13px;font-weight:600">'+it.name+'</div><div class="ts tm">'+fmt(it.val)+' ฿ · paid when criteria met</div></div><label class="switch"><input type="checkbox" '+(on?'checked':'')+' onchange="togDil(\''+s.id+'\',\''+it.id+'\',\''+key+'\',this)"><span class="slider"></span></label></div>';});dil+='</div>';}
-  const ded='<div class="income-grid"><div class="fbox ded"><label>📋 Leave Deduction</label><input type="number" id="pr-la-'+s.id+'" value="'+(e.dLa||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div><div class="fbox ded"><label>➖ Other Deductions (กยศ.)</label><input type="number" id="pr-doth-'+s.id+'" value="'+(e.dOth||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div></div>';
+  const ded='<div class="income-grid">'+
+    '<div class="fbox ded"><label>📋 Leave Days <span style="font-weight:400;text-transform:none;font-size:10px" id="dept-days-'+s.id+'"></span></label>'+
+    '<input type="number" id="pr-ldays-'+s.id+'" value="'+(e.leaveDays||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" step="0.5"></div>'+
+    '<div class="fbox ded"><label>⏰ Leave Hours</label>'+
+    '<input type="number" id="pr-lhrs-'+s.id+'" value="'+(e.leaveHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" step="0.5"></div>'+
+    '<div class="fbox ded" style="grid-column:span 2"><label>📋 Leave Deduction (auto-calculated) <span style="color:#e24b4a;font-weight:600" id="leave-preview-'+s.id+'">'+(c.dL>0?'− '+fmt(c.dL)+' ฿ ('+fmt(c.dailyRate)+' ฿/day · '+fmt(c.hourlyRate)+' ฿/hr)':'Enter days/hours above')+'</span></label></div>'+
+    '<div class="fbox ded"><label>➖ Other Deductions</label><input type="number" id="pr-doth-'+s.id+'" value="'+(e.dOth||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>'+
+    '</div>';
   return'<div class="spc'+(done?' done':'')+'" id="spc-'+s.id+'"><div class="spc-head"><div class="av" style="width:36px;height:36px;font-size:14px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+s.nn+' '+s.fn+(done?' <i class="ti ti-circle-check" style="color:var(--ok);font-size:17px"></i>':'')+'</div><div class="ts tm">'+s.dept+' · '+brN(s.br)+'</div></div><div style="text-align:right;margin-right:8px"><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase">Net Pay</div><div style="font-size:20px;font-weight:800;color:var(--nv)" id="snet-'+s.id+'">'+fmt(c.net)+' ฿</div></div>'+empBadge(s)+' '+tx+'</div><div class="spc-body">'+(advP.length?'<div style="background:#fef3c7;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px;border:1px solid #fcd34d"><i class="ti ti-credit-card"></i>Advance pending: <b>'+fmt(c.adv)+' ฿</b></div>':'')+'<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px"><i class="ti ti-plus" style="font-size:12px"></i> Income</div>'+inc+(dilIt.length?'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-toggle-right" style="font-size:12px"></i> เบี้ยขยัน</div>'+dil:'')+'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-minus" style="font-size:12px"></i> Deductions</div>'+ded+'<div id="acct-'+s.id+'">'+buildAcct(s,c)+'</div></div></div>';
 }
 function buildAcct(s,c){
-  let h='<div class="acct"><div class="ar sh">Income</div><div class="ar"><span class="lbl">Base Salary</span><span class="amt">'+fmt(c.bG)+' ฿</span></div>';
+  let h='<div class="acct"><div class="ar sh">Income</div>';
+  h+='<div class="ar"><span class="lbl">Base Salary</span><span class="amt">'+fmt(c.bG)+' ฿</span></div>';
+  if(c.dL>0){
+    h+='<div class="ar ded"><span class="lbl">Leave ('+fmt(c.leaveDays)+'d + '+fmt(c.leaveHrs)+'hrs)</span><span class="amt">−'+fmt(c.dL)+' ฿</span></div>';
+    h+='<div class="ar" style="font-size:11px"><span class="lbl" style="color:#6b7280">Effective Base</span><span class="amt" style="font-size:11px">'+fmt(c.effBase)+' ฿</span></div>';
+  }
   c.rows.forEach(r=>{h+='<div class="ar"><span class="lbl">'+r.name+(r.isWHT?' (after WHT)':'')+'</span><span class="amt">'+fmt(r.net)+' ฿</span></div>';});
   if(c.otA>0)h+='<div class="ar"><span class="lbl">OT ('+c.otH+'hrs)</span><span class="amt">'+fmt(c.otA)+' ฿</span></div>';
   if(c.bon>0)h+='<div class="ar"><span class="lbl">Bonus</span><span class="amt">'+fmt(c.bon)+' ฿</span></div>';
@@ -761,7 +795,14 @@ function buildAcct(s,c){
   return h;
 }
 function togDil(sid,iid,key,cb){if(!P[key])P[key]={};if(!P[key][sid])P[key][sid]={sid,diligence:{}};if(!P[key][sid].diligence)P[key][sid].diligence={};P[key][sid].diligence[iid]=cb.checked;const row=q('dr-'+sid+'-'+iid);if(row)row.className='toggle-row'+(cb.checked?' on':'');const s=S.find(x=>x.id===sid);if(!s)return;const e=P[key][sid];const c=calcM(s,e,key);e.net=c.net;const el=q('snet-'+sid);if(el)el.textContent=fmt(c.net)+' ฿';const ae=q('acct-'+sid);if(ae)ae.innerHTML=buildAcct(s,c);const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');updJump(act,key);updTopbar(act,key);}
-function gatherE(sid){const gval=id=>{const el=q(id+'-'+sid);return el?parseFloat(el.value)||0:0};const s=S.find(x=>x.id===sid);const periodic={};(s?s.items||[]:[]).filter(i=>i.type==='periodic').forEach(i=>{const el=q('pi-'+sid+'-'+i.id);if(el)periodic[i.id]=parseFloat(el.value)||0});const ek=Object.keys(P).find(k=>P[k]&&P[k][sid]);const diligence=(ek&&P[ek][sid])?P[ek][sid].diligence||{}:{};return{sid,hours:gval('pr-hrs'),days:gval('pr-days'),rev:gval('pr-rev'),mkt:gval('pr-mkt'),otHrs:gval('pr-ot'),bonus:gval('pr-bonus'),dLa:gval('pr-la'),dOth:gval('pr-doth'),periodic,diligence};}
+function gatherE(sid){const gval=id=>{const el=q(id+'-'+sid);return el?parseFloat(el.value)||0:0};const s=S.find(x=>x.id===sid);const periodic={};(s?s.items||[]:[]).filter(i=>i.type==='periodic').forEach(i=>{const el=q('pi-'+sid+'-'+i.id);if(el)periodic[i.id]=parseFloat(el.value)||0});const ek=Object.keys(P).find(k=>P[k]&&P[k][sid]);const diligence=(ek&&P[ek][sid])?P[ek][sid].diligence||{}:{};// Read period working days override per dept (stored in P[key].deptOverrides)
+  const key2=Object.keys(P).find(k=>P[k]&&P[k][sid]);
+  const existE=key2&&P[key2]?P[key2][sid]:{};
+  return{sid,hours:gval('pr-hrs'),days:gval('pr-days'),rev:gval('pr-rev'),mkt:gval('pr-mkt'),otHrs:gval('pr-ot'),bonus:gval('pr-bonus'),
+    leaveDays:gval('pr-ldays'),leaveHrs:gval('pr-lhrs'),
+    dOth:gval('pr-doth'),periodic,diligence,
+    periodDays:existE.periodDays||0};
+}
 function uc(sid,key){const s=S.find(x=>x.id===sid);if(!s)return;const e=gatherE(sid);if(!P[key])P[key]={};if(P[key][sid]&&P[key][sid].diligence)e.diligence=P[key][sid].diligence;const c=calcM(s,e,key);e.net=c.net;P[key][sid]=e;const el=q('snet-'+sid);if(el)el.textContent=fmt(c.net)+' ฿';const ae=q('acct-'+sid);if(ae)ae.innerHTML=buildAcct(s,c);const done=isDone(s,e);const sp=q('spc-'+sid);if(sp)sp.classList.toggle('done',done);const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');updJump(act,key);updTopbar(act,key);}
 function updTopbar(act,key){const dc=act.filter(s=>isDone(s,P[key]&&P[key][s.id]||{})).length;const tn=act.reduce((a,s)=>{const e=P[key]&&P[key][s.id]||{};return a+calcM(s,e,key).net},0);const pct=act.length?Math.round(dc/act.length*100):0;q('pay-topbar').innerHTML='<div class="g4" style="margin-bottom:10px"><div class="sc"><div class="sl">Filled in</div><div class="sv" style="color:var(--ok)">'+dc+' / '+act.length+'</div></div><div class="sc"><div class="sl">Total Net Pay</div><div class="sv" style="color:var(--nv)">'+fmt(tn)+' ฿</div></div><div class="sc"><div class="sl">Total SSO</div><div class="sv">'+fmt(act.filter(s=>s.ct==='permanent').reduce((a,s)=>{const e=P[key]&&P[key][s.id]||{};return a+calcM(s,e,key).sso},0))+' ฿</div></div><div class="sc"><div class="sl">Tax ภงด.1</div><div class="sv">'+fmt(act.filter(s=>s.ct==='permanent').reduce((a,s)=>{const e=P[key]&&P[key][s.id]||{};return a+calcM(s,e,key).mT},0))+' ฿</div></div></div><div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>';}
 function updJump(act,key){q('jump-list').innerHTML=act.map(s=>{const e=P[key]&&P[key][s.id]||{},d=isDone(s,e);return'<div class="ji'+(d?' done':'')+'" onclick="document.getElementById(\'spc-'+s.id+'\').scrollIntoView({behavior:\'smooth\',block:\'start\'})"><div class="jdot"></div><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.nn+'</span></div>';}).join('');}
@@ -892,9 +933,29 @@ q('btn-abranch').addEventListener('click',()=>openBM(null));q('btn-cancel-branch
 q('btn-del-branch').addEventListener('click',()=>{if(!_eBid||!confirm('Delete?'))return;B=B.filter(b=>b.id!==_eBid);svB();closeM('bm');rBrCards();popBrDl();});
 q('btn-save-branch').addEventListener('click',()=>{const nb={id:_eBid||'br'+Date.now(),name:q('b-name').value.trim(),addr:q('b-addr').value.trim(),lic:q('b-lic').value.trim(),tel:q('b-tel').value.trim(),certname:q('b-certname').value.trim()};if(!nb.name){alert('Branch name required');return}if(_eBid){const i=B.findIndex(x=>x.id===_eBid);if(i>=0)B[i]=nb;else B.push(nb)}else B.push(nb);svB();closeM('bm');rBrCards();popBrDl();});
 
-function addDept(){const v=q('new-dept').value.trim();if(!v||(C.depts||[]).includes(v))return;C.depts.push(v);svC();q('new-dept').value='';rDeptChips();popDeptDl();}
-function delDept(d){if(!confirm('Delete "'+d+'"?'))return;C.depts=C.depts.filter(x=>x!==d);svC();rDeptChips();popDeptDl();}
-function rDeptChips(){q('dept-chips').innerHTML=(C.depts||[]).map(d=>'<span class="chip">'+d+'<button onclick="delDept(\''+d+'\')">×</button></span>').join('');}
+function addDept(){const v=q('new-dept').value.trim();if(!v||(C.depts||[]).some(d=>(typeof d==='object'?d.name:d)===v))return;C.depts.push({name:v,days:26,hrs:9});svC();q('new-dept').value='';rDeptChips();popDeptDl();}
+function delDept(d){if(!confirm('Delete "'+d+'"?'))return;C.depts=C.depts.filter(x=>(typeof x==='object'?x.name:x)!==d);svC();rDeptChips();popDeptDl();}
+function rDeptChips(){
+  q('dept-chips').innerHTML=(C.depts||[]).map((d,i)=>{
+    const nm=typeof d==='object'?d.name:d;
+    const dy=typeof d==='object'?d.days:26;
+    const hr=typeof d==='object'?d.hrs:9;
+    return '<div class="chip" style="padding:5px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:8px;margin:3px">'+
+      '<span style="font-weight:600">'+nm+'</span>'+
+      '<span class="ts tm">'+
+        '<input type="number" value="'+dy+'" min="1" max="31" style="width:36px;padding:2px 4px;font-size:11px;border:1px solid var(--color-border-secondary);border-radius:4px;text-align:center" onchange="updDept('+i+',\'days\',this.value)" title="Working days/month">d'+
+        '<input type="number" value="'+hr+'" min="1" max="24" style="width:32px;padding:2px 4px;font-size:11px;border:1px solid var(--color-border-secondary);border-radius:4px;text-align:center;margin-left:4px" onchange="updDept('+i+',\'hrs\',this.value)" title="Working hours/day">h'+
+      '</span>'+
+      '<button onclick="delDept(\''+nm+'\')" style="background:none;border:none;cursor:pointer;color:var(--color-text-secondary);font-size:14px;padding:0 2px">×</button>'+
+    '</div>';
+  }).join('');
+}
+function updDept(i,field,val){
+  if(!C.depts[i])return;
+  if(typeof C.depts[i]==='string')C.depts[i]={name:C.depts[i],days:26,hrs:9};
+  C.depts[i][field]=parseFloat(val)||26;
+  svC();
+}
 q('btn-adept').addEventListener('click',addDept);
 function addIname(){const v=q('new-iname').value.trim();if(!v||(C.itemNames||[]).includes(v))return;C.itemNames.push(v);svC();q('new-iname').value='';rInameChips();}
 function delIname(n){C.itemNames=C.itemNames.filter(x=>x!==n);svC();rInameChips();}
