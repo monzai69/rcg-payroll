@@ -463,7 +463,7 @@ function calcM(s,e,key){
   (items||[]).forEach(item=>{
     if(item.isDiligence&&!(e.diligence&&e.diligence[item.id]))return;
     const gross=evalItem(item,rev,mkt,e);
-    const isK=['ค่ามือ','Commission','DF (Doctor Fee)'].includes(item.name);
+    const isK=item.name==='ค่ามือ';
     if(item.isWHT){const wht=gross*iWhtR;rows.push({name:item.name,net:gross-wht,isWHT:true,isDiligence:!!item.isDiligence});gI+=gross-wht;if(isK)kT+=gross-wht;}
     else{rows.push({name:item.name,net:gross,isWHT:false,isDiligence:!!item.isDiligence});gI+=gross;if(isK)kT+=gross;}
   });
