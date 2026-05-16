@@ -661,11 +661,13 @@ const ITYPES={
 function addItemWith(item){
   const tb=q('items-body'),tr=document.createElement('tr');
   const names=C.itemNames||[];const cur=item?item.name||'':'';
-  const nO=names.map(n=>'<option value="'+n+'"'+(cur===n?' selected':'')+'>'+n+'</option>').join('');
+  const isCustom=cur!==''&&!names.includes(cur)&&cur!=='อื่นๆ';
+  const displayCur=isCustom?'อื่นๆ':cur;
+  const nO=names.map(n=>'<option value="'+n+'"'+(displayCur===n?' selected':'')+'>'+n+'</option>').join('');
   const tO=Object.entries(ITYPES).map(([k,v])=>'<option value="'+k+'"'+(item&&item.type===k?' selected':'')+'>'+v+'</option>').join('');
   const isTieredType=item&&isTiered(item.type);
   const isFixedType=item&&item.type==='comm_tiered_fixed';
-  tr.innerHTML='<td><select class="insel" style="font-size:12px">'+nO+'</select><input type="text" class="incus" placeholder="Name..." style="font-size:12px;margin-top:3px;display:'+(cur==='อื่นๆ'?'block':'none')+'" value=""></td><td><select class="itype" style="font-size:12px">'+tO+'</select></td><td><input type="number" step="0.01" placeholder="Value" value="'+(item?item.val||'':'')+'" class="ival" style="font-size:12px"></td><td style="text-align:center"><input type="checkbox" class="iwht"'+(item&&item.isWHT?' checked':'')+' style="width:15px;height:15px;accent-color:var(--nv)"></td><td style="text-align:center"><input type="checkbox" class="idil"'+(item&&item.isDiligence?' checked':'')+' style="width:15px;height:15px;accent-color:var(--nv)"></td><td><button class="btn bo bsm" style="padding:3px 7px" type="button">×</button></td>';
+  tr.innerHTML='<td><select class="insel" style="font-size:12px">'+nO+'</select><input type="text" class="incus" placeholder="Name..." style="font-size:12px;margin-top:3px;display:'+(displayCur==='อื่นๆ'?'block':'none')+'" value="'+(isCustom?cur:'')+'"></td><td><select class="itype" style="font-size:12px">'+tO+'</select></td><td><input type="number" step="0.01" placeholder="Value" value="'+(item?item.val||'':'')+'" class="ival" style="font-size:12px"></td><td style="text-align:center"><input type="checkbox" class="iwht"'+(item&&item.isWHT?' checked':'')+' style="width:15px;height:15px;accent-color:var(--nv)"></td><td style="text-align:center"><input type="checkbox" class="idil"'+(item&&item.isDiligence?' checked':'')+' style="width:15px;height:15px;accent-color:var(--nv)"></td><td><button class="btn bo bsm" style="padding:3px 7px" type="button">×</button></td>';
   // Tier sub-row — spans all columns
   const tierTr=document.createElement('tr');
   tierTr.className='tier-sub-row';
