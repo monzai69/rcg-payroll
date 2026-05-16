@@ -786,7 +786,73 @@ function saveAll(){
   });
   svP();alert('Saved ✓ — salaries locked for this period.');
 }
-function doExport(){saveAll();const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);const rows=[['Nickname','Name','Dept','Branch','Base','Items','OT','Bonus','SSO','Tax','WHT','Leave','Advance','Other','Net','Revenue','ค่ามือ']];S.filter(s=>s.st==='Active'&&s.emptype!=='parttime').forEach(s=>{const e=P[key]&&P[key][s.id]||{};const c=calcM(s,e,key);rows.push([s.nn,s.fn+' '+s.ln,s.dept,brN(s.br),c.bG,Math.round(c.gI),Math.round(c.otA),c.bon,Math.round(c.sso),Math.round(c.mT),Math.round(c.whtD),c.dL,c.adv,c.dO,Math.round(c.net),c.rev,Math.round(c.kT)])});const csv=rows.map(r=>r.join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='RCG_Payroll_'+y+'_'+m+'.csv';a.click();}
+function doExport(){
+  saveAll();
+  const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);
+  // Helper: format number, negatives in (brackets)
+  const fmtN=n=>{
+    const v=parseFloat(n)||0;
+    if(v===0)return'0';
+    const abs=Math.abs(v);
+    const str=abs===Math.round(abs)?Math.round(abs).toLocaleString():abs.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    return v<0?'('+str+')':str;
+  };
+  // Collect all unique item names across all staff for dynamic columns
+  const allStaff=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');
+  const itemNamesSet=new Set();
+  allStaff.forEach(s=>{
+    const snap=P[key]&&P[key][s.id]&&P[key][s.id].snap;
+    (snap?snap.items:s.items||[]).forEach(i=>{if(i.name)itemNamesSet.add(i.name);});
+  });
+  const itemNames=[...itemNamesSet];
+  // Build header
+  const header=['Nickname','Name','Department','Branch','Employment Type',
+    'Base Salary','OT Hours','OT Amount',
+    ...itemNames,
+    'Gross Income',
+    'SSO','Income Tax (ภงด.1)','WHT','Leave Deduction','Advance Deduction','Other Deduction',
+    'Total Deductions','NET PAY'];
+  const rows=[header];
+  allStaff.forEach(s=>{
+    const e=P[key]&&P[key][s.id]||{};
+    const c=calcM(s,e,key);
+    const snap=e.snap;
+    const items=snap?snap.items:s.items||[];
+    // Build item amounts map
+    const itemAmts={};
+    c.rows.forEach(r=>{itemAmts[r.name]=(itemAmts[r.name]||0)+r.net;});
+    const row=[
+      s.nn,
+      s.fn+' '+s.ln,
+      s.dept,
+      brN(s.br),
+      s.emptype==='fulltime'?'Full-time':s.emptype==='fullparttime'?'Full-Part-time':'Part-time',
+      fmtN(c.bG),
+      c.otH||0,
+      fmtN(c.otA),
+      ...itemNames.map(n=>fmtN(itemAmts[n]||0)),
+      fmtN(c.gross),
+      c.sso>0?fmtN(-c.sso):'0',
+      c.mT>0?fmtN(-c.mT):'0',
+      c.whtD>0?fmtN(-c.whtD):'0',
+      c.dL>0?fmtN(-c.dL):'0',
+      c.adv>0?fmtN(-c.adv):'0',
+      c.dO>0?fmtN(-c.dO):'0',
+      fmtN(-(c.sso+c.mT+c.whtD+c.dL+c.adv+c.dO)),
+      fmtN(c.net)
+    ];
+    rows.push(row);
+  });
+  // Wrap cells that contain commas in quotes
+  const csvStr=rows.map(r=>r.map(cell=>{
+    const s=String(cell);
+    return s.includes(',')||s.includes('"')?'"'+s.replace(/"/g,'""')+'"':s;
+  }).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\ufeff'+csvStr],{type:'text/csv;charset=utf-8'}));
+  a.download='RCG_Payroll_'+MTH[m-1]+'_'+y+'.csv';
+  a.click();
+}
 
 function rAPsel(){q('apf-s').innerHTML='<option value="">All</option>';S.filter(s=>s.st==='Active'&&s.emptype==='parttime').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn+' ('+s.pos+')';q('apf-s').appendChild(o)});}
 function rAPlist(){const sf=qv('apf-s'),stf=qv('apf-st');let f=AP.filter(p=>(!sf||p.staffId===sf)&&(!stf||p.status===stf));f.sort((a,b)=>b.date.localeCompare(a.date));const cont=q('ap-list');cont.innerHTML='';if(!f.length){cont.innerHTML='<div class="card"><div class="no-data">No records</div></div>';return}f.forEach(p=>{const s=S.find(x=>x.id===p.staffId);const det=s&&s.pttype==='doctor'?(p.hours||0)+'hrs × '+fmt(p.hrrate||0)+'฿ + DF '+fmt(p.df_amt||0)+'฿':(p.days||0)+'d × '+fmt(p.dayrate||0)+'฿';const d=document.createElement('div');d.className='adv-card';d.innerHTML='<div class="av" style="width:32px;height:32px;font-size:12px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div><div style="flex:1"><div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+' <span class="badge bdocb" style="margin-left:5px">'+(s?s.pos:'')+'</span></div><div class="ts tm">'+(p.note||'')+' · '+det+' · '+p.date+'</div></div><div style="font-size:17px;font-weight:800;color:var(--doc)">'+fmt(p.net)+' ฿</div><span class="'+(p.status==='paid'?'adone':'atag')+'">'+(p.status==='paid'?'Paid':'Pending')+'</span>';const eb=document.createElement('button');eb.className='btn bo bsm';eb.innerHTML='<i class="ti ti-edit"></i>';eb.addEventListener('click',()=>openAP(p.id));d.appendChild(eb);if(p.status==='pending'){const mb=document.createElement('button');mb.className='btn bok bsm';mb.innerHTML='<i class="ti ti-check"></i>Mark Paid';mb.addEventListener('click',()=>markAP(p.id));d.appendChild(mb);}cont.appendChild(d);});}
