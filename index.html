@@ -472,7 +472,7 @@ function calcM(s,e,key){
   const totalLeaveHrs=(leaveDays*workHrs)+leaveHrs;  // e.g. 1d×9hrs + 2hrs = 11hrs
 
   // Base leave: base ÷ workDays ÷ workHrs × totalLeaveHrs (full precision)
-  const baseForLeave=(s.emptype==='fulltime'||s.emptype==='fullparttime')?(parseFloat(base)||0):0;
+  const baseForLeave=(emptype==='fulltime'||emptype==='fullparttime')?bG:0;  // use computed bG (not snap base) so FPT days×rate is correct
   const dailyRate=workDays>0?baseForLeave/workDays:0;           // exact, no rounding
   const hourlyRate=workDays>0&&workHrs>0?baseForLeave/workDays/workHrs:0; // exact
   const dLbase=totalLeaveHrs>0?hourlyRate*totalLeaveHrs:0;      // exact, no rounding
@@ -486,7 +486,7 @@ function calcM(s,e,key){
   const dL=dLbase+dLitems;  // total leave (exact)
 
   // Effective base = base − base leave (SSO/tax calculated on this)
-  const effBase=Math.max(0,(parseFloat(base)||0)-dLbase);
+  const effBase=Math.max(0,bG-dLbase);  // bG already computed above for both FT and FPT
   let rows=[],gI=0,kT=0;
   (items||[]).forEach(item=>{
     if(item.isDiligence&&!(e.diligence&&e.diligence[item.id]))return;
@@ -773,6 +773,7 @@ function buildCard(s,e,key){
     if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';
     if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs"></div>';
     inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';
+    perIt.forEach(i=>{inc+='<div class="fbox rev"><label>🤝 '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';});
   }
   else{if(hasRev)inc+='<div class="fbox rev"><label>📊 Revenue</label><input type="number" id="pr-rev-'+s.id+'" value="'+(e.rev||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';perIt.forEach(i=>{inc+='<div class="fbox rev"><label>🤝 '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';});if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs"></div>';inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';}
   inc+='</div>';
@@ -783,7 +784,7 @@ function buildCard(s,e,key){
     '<div class="fbox ded"><label>⏰ Leave Hours</label>'+
     '<input type="number" id="pr-lhrs-'+s.id+'" value="'+(e.leaveHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" step="0.5"></div>'+
     '<div class="fbox ded" style="grid-column:span 2"><label>📋 Leave Deduction (auto-calculated) <span style="color:#e24b4a;font-weight:600" id="leave-preview-'+s.id+'">'+(c.dL>0?'− '+fmt(c.dL)+' ฿ ('+fmt(c.dailyRate)+' ฿/day · '+fmt(c.hourlyRate)+' ฿/hr)':'Enter days/hours above')+'</span></label></div>'+
-    '<div class="fbox ded"><label>➖ Other Deductions (กยศ.)</label><input type="number" id="pr-doth-'+s.id+'" value="'+(e.dOth||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>'+
+    '<div class="fbox ded"><label>➖ Other Deductions</label><input type="number" id="pr-doth-'+s.id+'" value="'+(e.dOth||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>'+
     '</div>';
   return'<div class="spc'+(done?' done':'')+'" id="spc-'+s.id+'"><div class="spc-head"><div class="av" style="width:36px;height:36px;font-size:14px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+s.nn+' '+s.fn+(done?' <i class="ti ti-circle-check" style="color:var(--ok);font-size:17px"></i>':'')+'</div><div class="ts tm">'+s.dept+' · '+brN(s.br)+'</div></div><div style="text-align:right;margin-right:8px"><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase">Net Pay</div><div style="font-size:20px;font-weight:800;color:var(--nv)" id="snet-'+s.id+'">'+fmt(c.net)+' ฿</div></div>'+empBadge(s)+' '+tx+'</div><div class="spc-body">'+(advP.length?'<div style="background:#fef3c7;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px;border:1px solid #fcd34d"><i class="ti ti-credit-card"></i>Advance pending: <b>'+fmt(c.adv)+' ฿</b></div>':'')+'<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px"><i class="ti ti-plus" style="font-size:12px"></i> Income</div>'+inc+(dilIt.length?'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-toggle-right" style="font-size:12px"></i> เบี้ยขยัน</div>'+dil:'')+'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-minus" style="font-size:12px"></i> Deductions</div>'+ded+'<div id="acct-'+s.id+'">'+buildAcct(s,c)+'</div></div></div>';
 }
