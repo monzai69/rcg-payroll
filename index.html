@@ -182,26 +182,25 @@ input:checked+.slider:before{transform:translateX(18px)}
 </div>
 
 <div class="pg" id="pg-pay">
-  <!-- STICKY PERIOD BANNER — always visible while scrolling -->
-  <div id="pay-sticky-header" style="position:sticky;top:0;z-index:40;margin-bottom:14px">
-    <!-- Period selector row -->
-    <div style="background:var(--nv);border-radius:12px 12px 0 0;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:8px">
-        <i class="ti ti-calendar" style="color:var(--gd);font-size:18px"></i>
-        <span style="color:rgba(255,255,255,.6);font-size:12px;font-weight:500">PAYROLL PERIOD</span>
-        <select id="pm" style="width:130px;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:5px 9px;font-size:14px;font-weight:700;font-family:'Sarabun',sans-serif"></select>
-        <select id="py" style="width:90px;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:5px 9px;font-size:14px;font-weight:700;font-family:'Sarabun',sans-serif"></select>
-        <span id="pay-period-label" style="color:var(--gd);font-size:13px;font-weight:700;margin-left:4px"></span>
-      </div>
+  <div class="ph"><h1>Monthly Payroll</h1></div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="fx g12 ic" style="flex-wrap:wrap">
+      <div class="fx g8 ic"><label style="margin:0;font-weight:600">Period</label><select id="pm" style="width:140px"></select><select id="py" style="width:95px"></select></div>
       <div style="flex:1"></div>
-      <button class="btn bsm" id="btn-saveall" style="background:var(--ok);color:#fff"><i class="ti ti-device-floppy"></i>Save All</button>
-      <button class="btn bsm bgd" id="btn-export"><i class="ti ti-table-export"></i>Export CSV</button>
+      <button class="btn bok bsm" id="btn-saveall"><i class="ti ti-device-floppy"></i>Save All</button>
+      <button class="btn bgd bsm" id="btn-export"><i class="ti ti-table-export"></i>Export CSV</button>
     </div>
-    <!-- Progress/summary bar -->
-    <div id="pay-topbar" style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-top:none;border-radius:0 0 12px 12px;padding:10px 16px"></div>
   </div>
+  <div id="pay-topbar" style="margin-bottom:14px"></div>
   <div class="pay-layout">
-    <div class="pay-jump"><div class="pay-jump-inner"><div class="pay-jump-title">Quick Jump</div><div id="jump-list"></div></div></div>
+    <div class="pay-jump"><div class="pay-jump-inner">
+  <div style="background:var(--nv);border-radius:8px;padding:7px 10px;margin-bottom:10px;text-align:center">
+    <div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:.8px;text-transform:uppercase;margin-bottom:2px">Period</div>
+    <div id="jump-period" style="font-size:14px;font-weight:700;color:var(--gd)">—</div>
+  </div>
+  <div class="pay-jump-title">Quick Jump</div>
+  <div id="jump-list"></div>
+</div></div>
     <div class="pay-cards" id="pay-cards"></div>
   </div>
 </div>
@@ -755,18 +754,17 @@ function saveStaff(){
 }
 
 function rPay(){
-  // Update the sticky period label
-  const pm_val=parseInt(qv('pm')),py_val=parseInt(qv('py'));
-  const lbl=document.getElementById('pay-period-label');
-  if(lbl&&pm_val&&py_val)lbl.textContent=MTH[pm_val-1]+' '+py_val;
+  // Update period label in Quick Jump
+  const _pm=parseInt(qv('pm')),_py=parseInt(qv('py'));
+  const _lbl=document.getElementById('jump-period');
+  if(_lbl)_lbl.textContent=MTH[_pm-1]+' '+_py;
   const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);if(!P[key])P[key]={};
   const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');
   if(!act.length){q('pay-cards').innerHTML='<div class="no-data">No full-time / full-part-time staff</div>';return}
   q('pay-cards').innerHTML=act.map(s=>{const e=P[key][s.id]||{sid:s.id,rev:0,mkt:0,otHrs:0,bonus:0,dLa:0,dOth:0,hours:0,days:0,periodic:{},diligence:{}};return buildCard(s,e,key)}).join('');
   updTopbar(act,key);updJump(act,key);
 }
-q('pm').addEventListener('change',()=>{rPay();const lbl=document.getElementById('pay-period-label');if(lbl)lbl.textContent=MTH[parseInt(qv('pm'))-1]+' '+qv('py');});
-q('py').addEventListener('change',()=>{rPay();const lbl=document.getElementById('pay-period-label');if(lbl)lbl.textContent=MTH[parseInt(qv('pm'))-1]+' '+qv('py');});
+q('pm').addEventListener('change',rPay);q('py').addEventListener('change',rPay);
 q('btn-saveall').addEventListener('click',saveAll);q('btn-export').addEventListener('click',doExport);
 
 function buildCard(s,e,key){
