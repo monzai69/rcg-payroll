@@ -220,6 +220,29 @@ input:checked+.slider:before{transform:translateX(18px)}
 <div class="pg" id="pg-docs">
   <div class="ph"><h1>Documents</h1></div>
   <div class="tab-bar"><div class="tab active" id="tab-ps">Pay Slip</div><div class="tab" id="tab-cert">Certificate</div></div>
+
+  <!-- Logo display toggle — shared across both tabs -->
+  <div class="card" style="margin-bottom:13px;padding:12px 16px">
+    <div class="fx ic g8" style="flex-wrap:wrap">
+      <div style="font-size:12px;font-weight:700;color:#374151;white-space:nowrap"><i class="ti ti-photo" style="font-size:14px;margin-right:4px"></i>Logo on document:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap" id="doc-logo-mode-options">
+        <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;padding:5px 12px;border-radius:20px;border:1.5px solid #e5e7eb;background:#fff;transition:all .15s;font-weight:500" id="dlmode-none-lbl">
+          <input type="radio" name="doc-logo-mode" value="none" id="dlmode-none" style="accent-color:var(--nv);width:14px;height:14px">
+          <span>No logo</span>
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;padding:5px 12px;border-radius:20px;border:1.5px solid #e5e7eb;background:#fff;transition:all .15s;font-weight:500" id="dlmode-rcg-lbl">
+          <input type="radio" name="doc-logo-mode" value="rcg" id="dlmode-rcg" style="accent-color:var(--nv);width:14px;height:14px">
+          <span>RCG only</span>
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;padding:5px 12px;border-radius:20px;border:1.5px solid #e5e7eb;background:#fff;transition:all .15s;font-weight:500" id="dlmode-both-lbl">
+          <input type="radio" name="doc-logo-mode" value="both" id="dlmode-both" style="accent-color:var(--nv);width:14px;height:14px">
+          <span>Both logos</span>
+        </label>
+      </div>
+      <span style="font-size:11px;color:#9ca3af">(Upload logos in Settings)</span>
+    </div>
+  </div>
+
   <div id="dtab-ps">
     <div class="card" style="margin-bottom:13px"><div class="g2"><div class="fr"><label>Staff</label><select id="ds-s"><option value="">-- Select --</option></select></div><div class="fr"><label>Period</label><div class="fx g8"><select id="ds-m" style="flex:1"></select><select id="ds-y" style="flex:1"></select></div></div></div></div>
     <div id="ps-area"></div>
@@ -312,24 +335,7 @@ input:checked+.slider:before{transform:translateX(18px)}
       </div>
     </div>
 
-    <!-- Logo Display Mode -->
-    <div style="background:#f9fafb;border-radius:10px;padding:14px 16px;border:1px solid #f0f0f0">
-      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px">Show on Documents</div>
-      <div style="display:flex;flex-direction:column;gap:8px" id="logo-mode-options">
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;padding:8px 12px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;transition:all .15s" id="lmode-none-lbl">
-          <input type="radio" name="logo-mode" value="none" id="lmode-none" style="accent-color:var(--nv);width:16px;height:16px">
-          <span><b>No logo</b> <span style="color:#9ca3af;font-size:12px">— text only header</span></span>
-        </label>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;padding:8px 12px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;transition:all .15s" id="lmode-rcg-lbl">
-          <input type="radio" name="logo-mode" value="rcg" id="lmode-rcg" style="accent-color:var(--nv);width:16px;height:16px" checked>
-          <span><b>RCG logo only</b> <span style="color:#9ca3af;font-size:12px">— appears top-right on all documents</span></span>
-        </label>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;padding:8px 12px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;transition:all .15s" id="lmode-both-lbl">
-          <input type="radio" name="logo-mode" value="both" id="lmode-both" style="accent-color:var(--nv);width:16px;height:16px">
-          <span><b>Both logos</b> <span style="color:#9ca3af;font-size:12px">— RCG left, Clinic right (or centered if only one)</span></span>
-        </label>
-      </div>
-    </div>
+    <!-- Logo Display Mode moved to Documents page -->
 
     <!-- Live Preview -->
     <div style="margin-top:14px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:16px">
@@ -628,7 +634,7 @@ document.querySelectorAll('#nav .ni').forEach(ni=>{
     const pg=this.dataset.pg;
     document.querySelectorAll('#nav .ni').forEach(n=>n.classList.remove('active'));this.classList.add('active');
     document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));q('pg-'+pg).classList.add('active');
-    if(pg==='dash')rDash();if(pg==='staff'){rStaff();rDeptF();}if(pg==='pay')rPay();if(pg==='anytime'){rAPsel();rAPlist();}if(pg==='adv'){rAdvSels();rAdv();}if(pg==='docs'){popDocSels();rPS();rCert();}if(pg==='cfg'){ldCfg();rDeptChips();rInameChips();rBrCards();rLogoSettings();}
+    if(pg==='dash')rDash();if(pg==='staff'){rStaff();rDeptF();}if(pg==='pay')rPay();if(pg==='anytime'){rAPsel();rAPlist();}if(pg==='adv'){rAdvSels();rAdv();}if(pg==='docs'){popDocSels();rPS();rCert();rDocLogoModeUI();}if(pg==='cfg'){ldCfg();rDeptChips();rInameChips();rBrCards();rLogoSettings();}
   });
 });
 
@@ -1019,7 +1025,15 @@ q('tab-cert').addEventListener('click',function(){this.classList.add('active');q
 ['dc-s','dc-d','dc-rcg','dc-liv','dc-sal','dc-br'].forEach(id=>q(id).addEventListener('change',rCert));
 q('btn-print-ps').addEventListener('click',()=>doPrint('ps-print'));q('btn-print-cert').addEventListener('click',()=>doPrint('cert-print'));
 function rPS(){const sid=qv('ds-s'),m=parseInt(qv('ds-m')),y=parseInt(qv('ds-y')),key=mkKey(m,y);const area=q('ps-area');if(!sid){area.innerHTML='<div class="no-data">Select a staff member</div>';return}const s=S.find(x=>x.id===sid);if(!s){area.innerHTML='';return}const e=P[key]&&P[key][sid]||{};const c=calcM(s,e,key);const ds2=s.ct==='permanent'?'<div class="dr"><span>SSO (5% × '+fmt(c.bG)+' ฿)</span><span>−'+fmt(c.sso)+' ฿</span></div>'+(c.mT>0?'<div class="dr"><span>Tax ภงด.1</span><span>−'+fmt(c.mT)+' ฿</span></div>':''):'<div class="dr"><span>WHT '+(C.wht||3)+'%</span><span>−'+fmt(c.whtD)+' ฿</span></div>';const br2=s.emptype==='fullparttime'?'<div class="dr"><span>Hours/Days worked</span><span>'+fmt(c.bG)+' ฿</span></div>':'<div class="dr"><span>Base Salary</span><span>'+fmt(c.bG)+' ฿</span></div>';const logoHtml=buildLogoHeader();area.innerHTML='<div class="dprev" id="ps-print">'+logoHtml+'<div class="dhr"><div class="dco">'+C.cth+'</div><div style="font-size:12px;color:#6b7280;margin-top:2px">Pay Slip — '+MTH[m-1]+' '+y+'</div></div><table style="width:100%;font-size:12px;margin-bottom:12px;border-collapse:collapse"><tr><td style="padding:2px 0"><b>ID:</b> '+s.id+'</td><td><b>Name:</b> '+s.fn+' '+s.ln+'</td></tr><tr><td><b>Position:</b> '+s.pos+'</td><td><b>Branch:</b> '+brN(s.br)+'</td></tr><tr><td><b>Tenure:</b> '+tenure(s.sd)+'</td><td><b>Contract:</b> '+(s.ct==='permanent'?'Permanent (ภงด.1)':s.ct)+'</td></tr></table><div class="ds"><div class="dst">Income</div>'+br2+c.rows.map(r=>'<div class="dr"><span>'+r.name+(r.isWHT?' (WHT)':'')+'</span><span>'+fmt(r.net)+' ฿</span></div>').join('')+(c.otA>0?'<div class="dr"><span>OT ('+c.otH+'hrs)</span><span>'+fmt(c.otA)+' ฿</span></div>':'')+(c.bon>0?'<div class="dr"><span>Bonus</span><span>'+fmt(c.bon)+' ฿</span></div>':'')+'<div class="dr tot"><span>Total Income</span><span>'+fmt(c.gross)+' ฿</span></div></div><div class="ds"><div class="dst">Deductions</div>'+ds2+(c.dL>0?'<div class="dr"><span>Leave</span><span>−'+fmt(c.dL)+' ฿</span></div>':'')+(c.adv>0?'<div class="dr"><span>Advance</span><span>−'+fmt(c.adv)+' ฿</span></div>':'')+(c.dO>0?'<div class="dr"><span>Other</span><span>−'+fmt(c.dO)+' ฿</span></div>':'')+'<div class="dr tot"><span>Total Deductions</span><span>−'+fmt(c.sso+c.mT+c.whtD+c.dL+c.adv+c.dO)+' ฿</span></div></div><div style="background:var(--nv);color:#fff;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:8px"><b style="font-size:14px">NET PAY</b><b style="font-size:22px;color:#fde68a">'+fmt(c.net)+' ฿</b></div>'+(s.ct==='permanent'?'<div style="font-size:11px;color:#9ca3af;text-align:right;margin-top:4px">Est. annual tax: '+fmt(c.aT)+' ฿</div>':'')+'<div style="text-align:right;margin-top:22px;font-size:12px;color:#6b7280"><div>Authorized Signatory _______________________</div><div style="margin-top:3px">'+C.sgn+'</div><div>'+new Date().toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'})+'</div></div></div>';}
-function rCert(){const sid=qv('dc-s'),ds3=qv('dc-d'),rG=q('dc-rcg').checked,lV=q('dc-liv').checked,sal=q('dc-sal').checked,brId=qv('dc-br');q('cert-br-row').style.display=lV?'block':'none';const area=q('cert-area');if(!sid){area.innerHTML='<div class="no-data">Select a staff member</div>';return}const s=S.find(x=>x.id===sid);if(!s){area.innerHTML='';return}const bO=brO(brId),dd=thDate(ds3),sd2=thDate(s.sd);const cn=bO.certname||bO.name||'';const logoHtml=buildLogoHeader();let hdr='';if(rG&&lV)hdr='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:16px"><div>'+cn+(bO.lic?'<br>เลขที่ใบอนุญาต '+bO.lic:'')+'</div><div style="text-align:right">'+C.cth+'</div></div>';else if(lV)hdr='<div style="font-size:12px;margin-bottom:16px">'+cn+(bO.lic?'<br>เลขที่ใบอนุญาต '+bO.lic:'')+'</div>';else hdr='<div style="font-size:12px;margin-bottom:16px;text-align:right">'+C.cth+'</div>';area.innerHTML='<div class="dprev" id="cert-print">'+logoHtml+hdr+'<div style="text-align:center;margin-bottom:15px"><div style="font-size:15px;font-weight:700;text-decoration:underline;color:var(--nv)">หนังสือรับรองพนักงาน</div></div><div style="text-align:right;font-size:12px;margin-bottom:14px;color:#6b7280">ออกให้ ณ วันที่ '+dd+'</div><div style="line-height:2.2;font-size:13px"><p>หนังสือฉบับนี้ออกให้เพื่อรับรองว่า <b>'+s.fn+' '+s.ln+'</b> เป็นพนักงานของ'+C.cth+'</p><p>ตำแหน่ง <b>'+s.pos+' · '+s.dept+'</b></p>'+(lV&&cn?'<p>ที่'+cn+'</p>':'')+(sal&&s.emptype==='fulltime'?'<p>มีอัตราเงินเดือนล่าสุด <b>'+fmt(s.base)+' บาทต่อเดือน</b> (ไม่รวมค่าคอมมิชชั่น)</p>':'')+'<p>เริ่มงาน '+sd2+' จนถึงปัจจุบัน</p><p>อายุงาน: '+tenure(s.sd)+'</p><p>จึงเรียนมาเพื่อทราบ</p></div><div style="text-align:center;margin-top:32px;font-size:12px"><div>____________________________</div><div style="margin-top:4px">'+C.sgn+'</div><div>'+dd+'</div></div></div>';}
+function rCert(){const sid=qv('dc-s'),ds3=qv('dc-d'),rG=q('dc-rcg').checked,lV=q('dc-liv').checked,sal=q('dc-sal').checked,brId=qv('dc-br');q('cert-br-row').style.display=lV?'block':'none';const area=q('cert-area');if(!sid){area.innerHTML='<div class="no-data">Select a staff member</div>';return}const s=S.find(x=>x.id===sid);if(!s){area.innerHTML='';return}const bO=brO(brId),dd=thDate(ds3),sd2=thDate(s.sd);const cn=bO.certname||bO.name||'';const logoHtml=buildLogoHeader();
+// Text header: clinic info left, company info right
+let hdr='';
+const clinicBlock='<div>'+(cn?'<div style="font-weight:700">'+cn+'</div>':'')+(bO.lic?'<div>เลขที่ใบอนุญาต '+bO.lic+'</div>':'')+(bO.addr?'<div style="color:#6b7280">'+bO.addr+'</div>':'')+(bO.tel?'<div style="color:#6b7280">โทร '+bO.tel+'</div>':'')+'</div>';
+const companyBlock='<div style="text-align:right"><div style="font-weight:700">'+C.cth+'</div>'+(C.addr?'<div style="color:#6b7280;white-space:pre-line">'+C.addr+'</div>':'')+'</div>';
+if(rG&&lV)hdr='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:16px;gap:12px">'+clinicBlock+companyBlock+'</div>';
+else if(lV)hdr='<div style="font-size:12px;margin-bottom:16px">'+clinicBlock+'</div>';
+else hdr='<div style="font-size:12px;margin-bottom:16px">'+companyBlock+'</div>';
+area.innerHTML='<div class="dprev" id="cert-print">'+logoHtml+hdr+'<div style="text-align:center;margin-bottom:15px"><div style="font-size:15px;font-weight:700;text-decoration:underline;color:var(--nv)">หนังสือรับรองพนักงาน</div></div><div style="text-align:right;font-size:12px;margin-bottom:14px;color:#6b7280">ออกให้ ณ วันที่ '+dd+'</div><div style="line-height:2.2;font-size:13px"><p>หนังสือฉบับนี้ออกให้เพื่อรับรองว่า <b>'+s.fn+' '+s.ln+'</b> เป็นพนักงานของ'+C.cth+'</p><p>ตำแหน่ง <b>'+s.pos+' · '+s.dept+'</b></p>'+(lV&&cn?'<p>ที่'+cn+'</p>':'')+(sal&&s.emptype==='fulltime'?'<p>มีอัตราเงินเดือนล่าสุด <b>'+fmt(s.base)+' บาทต่อเดือน</b> (ไม่รวมค่าคอมมิชชั่น)</p>':'')+'<p>เริ่มงาน '+sd2+' จนถึงปัจจุบัน</p><p>อายุงาน: '+tenure(s.sd)+'</p><p>จึงเรียนมาเพื่อทราบ</p></div><div style="text-align:center;margin-top:32px;font-size:12px"><div>____________________________</div><div style="margin-top:4px">'+C.sgn+'</div><div>'+dd+'</div></div></div>';}
 function doPrint(id){const el=document.getElementById(id);if(!el){alert('Please select a staff member first');return}const w=window.open('','_blank');w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet"><title>RCG</title><style>body{font-family:\'Sarabun\',sans-serif;padding:28px;font-size:13px;color:#1a1a2e;max-width:600px;margin:auto}.dr{display:flex;justify-content:space-between;padding:3px 0}.dr.tot{border-top:1.5px solid #374151;font-weight:700;margin-top:4px;padding-top:4px}@media print{@page{margin:18mm}body{padding:0}}</style></head><body>'+el.outerHTML+'<scr'+'ipt>window.onload=()=>setTimeout(()=>window.print(),500)<\/scr'+'ipt></body></html>');w.document.close();}
 
 function rBrCards(){q('branch-cards').innerHTML=B.map(b=>'<div class="branch-card"><div class="fx jb ic" style="margin-bottom:8px"><div style="font-weight:700;font-size:14px"><i class="ti ti-building" style="margin-right:7px;color:var(--nv)"></i>'+b.name+'</div><button class="btn bo bsm edit-br-btn" data-id="'+b.id+'"><i class="ti ti-edit"></i>Edit</button></div><div class="g2" style="font-size:12.5px;gap:7px;color:#6b7280">'+(b.addr?'<div>'+b.addr+'</div>':'<div>No address</div>')+'<div>'+(b.lic?'License: '+b.lic:'-')+(b.tel?' · '+b.tel:'')+'</div></div>'+(b.certname?'<div style="font-size:11.5px;color:#9ca3af;margin-top:4px">Cert: '+b.certname+'</div>':'')+'</div>').join('');document.querySelectorAll('.edit-br-btn').forEach(btn=>btn.addEventListener('click',function(){openBM(this.dataset.id);}));}
@@ -1067,6 +1081,7 @@ function rLogoSettings(){
     const prev=document.getElementById('logo-'+k+'-preview');
     const rem=document.getElementById('logo-'+k+'-remove');
     const dz=document.getElementById('logo-'+k+'-dropzone');
+    if(!prev)return;
     if(img){
       prev.innerHTML='<img src="'+img+'" style="max-height:70px;max-width:100%;object-fit:contain;border-radius:4px">';
       rem.style.display='block';
@@ -1077,37 +1092,40 @@ function rLogoSettings(){
       dz.style.borderColor='#e5e7eb';dz.style.borderStyle='dashed';
     }
   });
-  // Set radio
-  const mode=LOGOS.mode||'rcg';
-  const r=document.querySelector('input[name="logo-mode"][value="'+mode+'"]');
-  if(r)r.checked=true;
-  // Highlight selected label
-  document.querySelectorAll('#logo-mode-options label').forEach(l=>{
-    const inp=l.querySelector('input');
-    l.style.borderColor=inp.checked?'var(--nv)':'#e5e7eb';
-    l.style.background=inp.checked?'#eff6ff':'#fff';
-  });
   rLogoPreview();
 }
 
-function rLogoPreview(){
+function rDocLogoModeUI(){
+  // Sync radio buttons on the Documents page
   const mode=LOGOS.mode||'rcg';
+  const r=document.querySelector('input[name="doc-logo-mode"][value="'+mode+'"]');
+  if(r)r.checked=true;
+  document.querySelectorAll('#doc-logo-mode-options label').forEach(l=>{
+    const inp=l.querySelector('input');
+    l.style.borderColor=inp&&inp.checked?'var(--nv)':'#e5e7eb';
+    l.style.background=inp&&inp.checked?'#eff6ff':'#fff';
+    l.style.color=inp&&inp.checked?'var(--nv)':'#374151';
+  });
+}
+
+function rLogoPreview(){
   const prev=document.getElementById('logo-doc-preview');
   if(!prev)return;
-  prev.innerHTML='<div style="font-size:11px;color:#9ca3af;margin-bottom:8px">Sample document header</div>'+buildLogoHeader(mode)+'<div style="border-top:2px solid var(--nv);padding-top:8px;margin-top:2px"><div style="font-size:13px;font-weight:700;color:var(--nv)">บริษัท เรดี้ เช็ค โก กรุ๊ป จำกัด</div><div style="font-size:11px;color:#9ca3af">Pay Slip — May 2026</div></div>';
+  prev.innerHTML='<div style="font-size:11px;color:#9ca3af;margin-bottom:8px">Sample document header</div>'+buildLogoHeader()+'<div style="border-top:2px solid var(--nv);padding-top:8px;margin-top:2px"><div style="font-size:13px;font-weight:700;color:var(--nv)">บริษัท เรดี้ เช็ค โก กรุ๊ป จำกัด</div><div style="font-size:11px;color:#9ca3af">Pay Slip — May 2026</div></div>';
 }
 
 function buildLogoHeader(mode){
   mode=mode||LOGOS.mode||'rcg';
   if(mode==='none')return'';
+  // RCG logo = top-LEFT, Clinic logo = top-RIGHT
   const rcg=LOGOS.rcg,cli=LOGOS.clinic;
   if(mode==='rcg'){
     if(!rcg)return'';
-    return'<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px"><img src="'+rcg+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
+    return'<div style="display:flex;justify-content:flex-start;align-items:center;margin-bottom:10px"><img src="'+rcg+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
   }
   if(mode==='both'){
     if(!rcg&&!cli)return'';
-    if(rcg&&!cli)return'<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px"><img src="'+rcg+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
+    if(rcg&&!cli)return'<div style="display:flex;justify-content:flex-start;align-items:center;margin-bottom:10px"><img src="'+rcg+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
     if(!rcg&&cli)return'<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px"><img src="'+cli+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
     return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><img src="'+rcg+'" style="max-height:52px;max-width:140px;object-fit:contain"><img src="'+cli+'" style="max-height:52px;max-width:140px;object-fit:contain"></div>';
   }
@@ -1128,21 +1146,19 @@ function initLogoHandlers(){
       rd.readAsDataURL(f);
     });
   });
-  document.querySelectorAll('input[name="logo-mode"]').forEach(r=>{
+  // Wire the Documents page logo-mode radios
+  document.querySelectorAll('input[name="doc-logo-mode"]').forEach(r=>{
     r.addEventListener('change',function(){
       LOGOS.mode=this.value;svL();
-      // Highlight labels
-      document.querySelectorAll('#logo-mode-options label').forEach(l=>{
-        const inp=l.querySelector('input');
-        l.style.borderColor=inp.checked?'var(--nv)':'#e5e7eb';
-        l.style.background=inp.checked?'#eff6ff':'#fff';
-      });
+      rDocLogoModeUI();
       rLogoPreview();
+      // Re-render open document if any
+      rPS();rCert();
     });
   });
 }
 
-ld();initSels();rDash();initLogoHandlers();
+ld();initSels();rDash();initLogoHandlers();rDocLogoModeUI();
 </script>
 </body>
 </html>
