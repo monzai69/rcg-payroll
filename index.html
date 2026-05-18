@@ -1187,16 +1187,17 @@ function rLogoPreview(){
 function buildLogoHeader(mode){
   mode=mode||LOGOS.mode||'rcg';
   if(mode==='none')return'';
-  // KEY FIX: upload zones are swapped in UI so 'clinic' key = RCG logo (left), 'rcg' key = Clinic logo (right)
-  const left=LOGOS.clinic, right=LOGOS.rcg;
+  // Clinic logo = top-LEFT, RCG logo = top-RIGHT
+  // Upload zones in Settings: left zone saves to 'clinic' key, right zone saves to 'rcg' key
+  const left=LOGOS.rcg, right=LOGOS.clinic;
   if(mode==='rcg'){
-    if(!left)return'';
-    return'<div style="display:flex;justify-content:flex-start;align-items:center;margin-bottom:10px"><img src="'+left+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
+    if(!right)return'';
+    return'<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px"><img src="'+right+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
   }
   if(mode==='both'){
     if(!left&&!right)return'';
-    if(left&&!right)return'<div style="display:flex;justify-content:flex-start;align-items:center;margin-bottom:10px"><img src="'+left+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
     if(!left&&right)return'<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px"><img src="'+right+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
+    if(left&&!right)return'<div style="display:flex;justify-content:flex-start;align-items:center;margin-bottom:10px"><img src="'+left+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
     return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><img src="'+left+'" style="max-height:52px;max-width:140px;object-fit:contain"><img src="'+right+'" style="max-height:52px;max-width:140px;object-fit:contain"></div>';
   }
   return'';
