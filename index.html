@@ -240,6 +240,11 @@ input:checked+.slider:before{transform:translateX(18px)}
         </label>
       </div>
       <span style="font-size:11px;color:#9ca3af">(Upload logos in Settings)</span>
+      <span style="width:1px;height:18px;background:#e5e7eb;margin:0 4px"></span>
+      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:500;color:#374151">
+        <input type="checkbox" id="doc-show-stamp" style="accent-color:var(--nv);width:15px;height:15px">
+        Show stamp
+      </label>
     </div>
   </div>
 
@@ -345,6 +350,45 @@ input:checked+.slider:before{transform:translateX(18px)}
       </div>
     </div>
 
+  </div>
+
+  <!-- SIGNATURE & STAMP SETTINGS -->
+  <div class="card" style="margin-top:14px">
+    <div class="st" style="margin-bottom:4px">Signature &amp; Company Stamp</div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:14px">Shown at the bottom of Pay Slips and Certificates. Use transparent PNG for best results. Max 2MB each.</div>
+    <div class="g2" style="gap:14px">
+
+      <!-- Signature -->
+      <div style="border:1.5px dashed #e5e7eb;border-radius:12px;padding:16px;text-align:center;background:#fafafa;transition:border-color .2s" id="sig-dropzone">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9ca3af;margin-bottom:10px">Authorized Signature</div>
+        <div id="sig-preview" style="min-height:60px;display:flex;align-items:center;justify-content:center;margin-bottom:10px">
+          <div style="color:#d1d5db;font-size:12px"><i class="ti ti-writing-sign" style="font-size:28px;display:block;margin-bottom:4px"></i>No signature uploaded</div>
+        </div>
+        <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:var(--nv);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;margin-bottom:0">
+          <i class="ti ti-upload" style="font-size:14px"></i>Upload Signature
+          <input type="file" id="sig-input" accept="image/*" style="display:none">
+        </label>
+        <div id="sig-remove" style="display:none;margin-top:8px">
+          <button class="btn bsm" style="background:#fee2e2;color:#991b1b;border:none;font-size:11px" onclick="removeSigStamp('sig')"><i class="ti ti-trash" style="font-size:12px"></i>Remove</button>
+        </div>
+      </div>
+
+      <!-- Stamp -->
+      <div style="border:1.5px dashed #e5e7eb;border-radius:12px;padding:16px;text-align:center;background:#fafafa;transition:border-color .2s" id="stamp-dropzone">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9ca3af;margin-bottom:10px">Company Stamp / Seal</div>
+        <div id="stamp-preview" style="min-height:60px;display:flex;align-items:center;justify-content:center;margin-bottom:10px">
+          <div style="color:#d1d5db;font-size:12px"><i class="ti ti-rosette" style="font-size:28px;display:block;margin-bottom:4px"></i>No stamp uploaded</div>
+        </div>
+        <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:var(--nv);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;margin-bottom:0">
+          <i class="ti ti-upload" style="font-size:14px"></i>Upload Stamp
+          <input type="file" id="stamp-input" accept="image/*" style="display:none">
+        </label>
+        <div id="stamp-remove" style="display:none;margin-top:8px">
+          <button class="btn bsm" style="background:#fee2e2;color:#991b1b;border:none;font-size:11px" onclick="removeSigStamp('stamp')"><i class="ti ti-trash" style="font-size:12px"></i>Remove</button>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
 
@@ -474,8 +518,8 @@ input:checked+.slider:before{transform:translateX(18px)}
 </div></div>
 
 <script>
-const SK='rcg10_s',PK='rcg10_p',CK='rcg10_c',AK='rcg10_a',APK='rcg10_ap',BK='rcg10_b',LK='rcg10_logos';
-let S=[],P={},C={},A=[],AP=[],B=[],LOGOS={rcg:null,clinic:null,mode:'rcg'};
+const SK='rcg10_s',PK='rcg10_p',CK='rcg10_c',AK='rcg10_a',APK='rcg10_ap',BK='rcg10_b',LK='rcg10_logos',SSK='rcg10_sigstamp';
+let S=[],P={},C={},A=[],AP=[],B=[],LOGOS={rcg:null,clinic:null,mode:'rcg'},SIGSTAMP={sig:null,stamp:null,showStamp:true};
 let _eSid=null,_eBid=null,_eAid=null,_eAPid=null;
 
 function ld(){
@@ -486,6 +530,7 @@ function ld(){
   try{AP=JSON.parse(localStorage.getItem(APK)||'[]')}catch{AP=[]}
   try{B=JSON.parse(localStorage.getItem(BK)||'[]')}catch{B=[]}
   try{LOGOS=Object.assign({rcg:null,clinic:null,mode:'rcg'},JSON.parse(localStorage.getItem(LK)||'{}'))}catch{LOGOS={rcg:null,clinic:null,mode:'rcg'}}
+  try{SIGSTAMP=Object.assign({sig:null,stamp:null,showStamp:true},JSON.parse(localStorage.getItem(SSK)||'{}'))}catch{SIGSTAMP={sig:null,stamp:null,showStamp:true}}
   C=Object.assign({cth:'บริษัท เรดี้ เช็ค โก กรุ๊ป จำกัด',addr:'496/14 ถนนสาธุประดิษฐ์ แขวงบางโพงพาง เขตยานนาวา กรุงเทพฯ 10120',sgn:'สมน สถิตยางกูร (ผู้บริหารการเงิน)',sso:5,ssoC:17500,wht:3,d50:100000,pers:60000,depts:[{name:'CEO',days:26,hrs:9},{name:'COO',days:26,hrs:9},{name:'Marketing',days:22,hrs:9},{name:'Operation',days:26,hrs:9},{name:'Operation-Front',days:24,hrs:9},{name:'Admin',days:26,hrs:9},{name:'HR',days:26,hrs:9}],itemNames:['ค่ามือ','เบี้ยขยัน','ค่าตำแหน่ง','Incentive','Support','Commission','DF (Doctor Fee)','โบนัส','รีวิว','อื่นๆ']},C);
   if(!Array.isArray(C.depts))C.depts=[{name:'Operation',days:26,hrs:9}];
   // Migrate string depts to objects
@@ -498,7 +543,7 @@ function ld(){
   svS();
 }
 const sv=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
-const svS=()=>sv(SK,S),svP=()=>sv(PK,P),svC=()=>sv(CK,C),svA=()=>sv(AK,A),svAP=()=>sv(APK,AP),svB=()=>sv(BK,B),svL=()=>sv(LK,LOGOS);
+const svS=()=>sv(SK,S),svP=()=>sv(PK,P),svC=()=>sv(CK,C),svA=()=>sv(AK,A),svAP=()=>sv(APK,AP),svB=()=>sv(BK,B),svL=()=>sv(LK,LOGOS),svSS=()=>sv(SSK,SIGSTAMP);
 
 function seedB(){B=[{id:'br1',name:'RCG Silom',addr:'496/14 ถนนสาธุประดิษฐ์',lic:'',tel:'',certname:''},{id:'br2',name:'LIV Clinic Samui',addr:'เกาะสมุย จังหวัดสุราษฎร์ธานี',lic:'10101028777',tel:'',certname:'ลีฟ คลินิกเวชกรรม สาขาเกาะสมุย'},{id:'br3',name:'Carebox',addr:'',lic:'',tel:'',certname:''}];svB()}
 function seedS(){const d=[{fn:'นราทัย',ln:'วิเชียรกัลยารัตน์',nn:'ไท่',dept:'CEO',pos:'CEO',br:'br1',sd:'2021-08-18',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'สมน',ln:'สถิตยางกูร',nn:'มน',dept:'COO',pos:'COO-CFO',br:'br1',sd:'2021-08-18',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'มาเรีย',ln:'อาลี',nn:'ลูกตาล',dept:'Marketing',pos:'Graphic',br:'br1',sd:'2021-09-01',base:14500,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ตะวันฉาย',ln:'คีรีนาวงศ์',nn:'เก๋',dept:'Operation',pos:'Admin',br:'br1',sd:'2022-01-15',base:12000,emptype:'fulltime',ct:'permanent',ex:0,otrate:75,items:[{id:'i1',name:'ค่าตำแหน่ง',type:'fixed',val:2500,isWHT:false,isDiligence:false}]},{fn:'นพรัตน์',ln:'เรืองโรจน์',nn:'แนตตี้',dept:'Marketing',pos:'Marketing Manager',br:'br1',sd:'2022-08-01',base:43000,emptype:'fulltime',ct:'permanent',ex:0,otrate:0,items:[{id:'i1',name:'Incentive',type:'comm_flat',val:0.3,isWHT:false,isDiligence:false}]},{fn:'อิงวรินทร์',ln:'เปตามานัง',nn:'บุ๋ม',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2023-10-01',base:15000,emptype:'fulltime',ct:'permanent',ex:0,otrate:0,items:[{id:'id1',name:'ค่าตำแหน่ง',type:'fixed',val:2000,isWHT:false,isDiligence:false},{id:'id2',name:'ค่ามือ',type:'comm_flat',val:2,isWHT:true,isDiligence:false,tiers:[]},{id:'id3',name:'เบี้ยขยัน',type:'fixed',val:1000,isWHT:false,isDiligence:true}]},{fn:'สุภาพ',ln:'โตมา',nn:'แย้ม',dept:'Operation',pos:'House Keeper',br:'br2',sd:'2023-09-15',base:12000,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ฐิตารีย์',ln:'ปรีชาบารมีสุข',nn:'ขวัญ',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2024-01-02',base:15000,emptype:'fulltime',ct:'permanent',ex:0,otrate:63,items:[{id:'i1',name:'Support',type:'fixed',val:1000,isWHT:false,isDiligence:false},{id:'i2',name:'ค่ามือ',type:'comm_flat',val:1.5,isWHT:true,isDiligence:false,tiers:[]}]},{fn:'ไลลา',ln:'กาหมัน',nn:'ไลลา',dept:'Operation',pos:'Sales',br:'br2',sd:'2024-01-13',base:16500,emptype:'fulltime',ct:'permanent',ex:0,otrate:69,items:[{id:'i1',name:'ค่ามือ',type:'comm_tiered',val:0,isWHT:true,isDiligence:false,tiers:[{f:0,t:399999,r:1.5},{f:400000,t:799999,r:2},{f:800000,t:9999999,r:2.5}]}]},{fn:'สุพิชชา',ln:'ทองดา',nn:'หนูนา',dept:'Operation',pos:'Nurse',br:'br2',sd:'2024-04-04',base:0,emptype:'fullparttime',fptmethod:'hourly',hrrate:100,stdhrs:160,ct:'contract',ex:0,otrate:0},{fn:'วีรศักดิ์',ln:'แตงอ่อน',nn:'แชมป์',dept:'Marketing',pos:'Graphic',br:'br1',sd:'2024-05-27',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'แพทย์หญิงสุชากานต์',ln:'โรจน์สราญรมย์',nn:'น้ำ',dept:'Operation',pos:'Doctor',br:'br2',sd:'2024-09-25',base:0,emptype:'parttime',pttype:'doctor',hrrate:500,dhrs:7,df:15,ct:'freelance',ex:0,otrate:0},{fn:'อังศิณา',ln:'ขอยื้อกลาง',nn:'แหม่ม',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2025-01-11',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'Pheth',ln:'Omsene',nn:'นาง',dept:'Operation',pos:'House Keeper',br:'br2',sd:'2025-05-01',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'แพทย์หญิงชิตพัณน์',ln:'ปรีชาทรัพย์',nn:'ต้อง',dept:'Operation',pos:'Doctor',br:'br1',sd:'2026-01-02',base:0,emptype:'parttime',pttype:'doctor',hrrate:500,dhrs:7,df:15,ct:'freelance',ex:0,otrate:0},{fn:'สุพรรณี',ln:'วรนาฏ',nn:'ชบา',dept:'Operation',pos:'Nurse',br:'br2',sd:'2026-01-03',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'จิตสุภา',ln:'พวงยี่สุ้น',nn:'กุ๊กกิ๊ก',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2026-04-21',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'เจณณิษฐา',ln:'โชติวัชร์หิรัญ',nn:'คิม',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2026-03-27',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'วรรณชนก',ln:'เลิศธนกิจไพศาล',nn:'โบ',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2026-05-02',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'นายแพทย์สันติพัฒน์',ln:'จันทร์หอม',nn:'ทัช',dept:'Operation',pos:'Doctor',br:'br1',sd:'2026-03-29',base:0,emptype:'parttime',pttype:'doctor',hrrate:500,dhrs:7,df:15,ct:'freelance',ex:0,otrate:0},{fn:'พีรนนท์',ln:'นวลหนู',nn:'นัน',dept:'Operation',pos:'Digital Marketing',br:'br1',sd:'2025-08-04',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ธนัทวดี',ln:'แก้วจอมสิน',nn:'กรีน',dept:'Operation',pos:'Admin',br:'br1',sd:'2026-01-26',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ธนาลักษณ์',ln:'ฉลูทอง',nn:'หญิง',dept:'Operation',pos:'Nurse',br:'br2',sd:'2026-04-18',base:0,emptype:'fullparttime',fptmethod:'hourly',hrrate:90,stdhrs:160,ct:'contract',ex:0,otrate:0},{fn:'พรรณวษา',ln:'พัสดร',nn:'บอม',dept:'Operation',pos:'Admin',br:'br1',sd:'2026-04-19',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ศิริวรรณ',ln:'กริ่มใจ',nn:'อ้อ',dept:'Operation',pos:'House Keeper',br:'br2',sd:'2026-04-21',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0}];
@@ -1024,7 +1069,7 @@ q('tab-cert').addEventListener('click',function(){this.classList.add('active');q
 ['ds-s','ds-m','ds-y'].forEach(id=>q(id).addEventListener('change',rPS));
 ['dc-s','dc-d','dc-rcg','dc-liv','dc-sal','dc-br'].forEach(id=>q(id).addEventListener('change',rCert));
 q('btn-print-ps').addEventListener('click',()=>doPrint('ps-print'));q('btn-print-cert').addEventListener('click',()=>doPrint('cert-print'));
-function rPS(){const sid=qv('ds-s'),m=parseInt(qv('ds-m')),y=parseInt(qv('ds-y')),key=mkKey(m,y);const area=q('ps-area');if(!sid){area.innerHTML='<div class="no-data">Select a staff member</div>';return}const s=S.find(x=>x.id===sid);if(!s){area.innerHTML='';return}const e=P[key]&&P[key][sid]||{};const c=calcM(s,e,key);const ds2=s.ct==='permanent'?'<div class="dr"><span>SSO (5% × '+fmt(c.bG)+' ฿)</span><span>−'+fmt(c.sso)+' ฿</span></div>'+(c.mT>0?'<div class="dr"><span>Tax ภงด.1</span><span>−'+fmt(c.mT)+' ฿</span></div>':''):'<div class="dr"><span>WHT '+(C.wht||3)+'%</span><span>−'+fmt(c.whtD)+' ฿</span></div>';const br2=s.emptype==='fullparttime'?'<div class="dr"><span>Hours/Days worked</span><span>'+fmt(c.bG)+' ฿</span></div>':'<div class="dr"><span>Base Salary</span><span>'+fmt(c.bG)+' ฿</span></div>';const logoHtml=buildLogoHeader();area.innerHTML='<div class="dprev" id="ps-print">'+logoHtml+'<div class="dhr"><div class="dco">'+C.cth+'</div><div style="font-size:12px;color:#6b7280;margin-top:2px">Pay Slip — '+MTH[m-1]+' '+y+'</div></div><table style="width:100%;font-size:12px;margin-bottom:12px;border-collapse:collapse"><tr><td style="padding:2px 0"><b>ID:</b> '+s.id+'</td><td><b>Name:</b> '+s.fn+' '+s.ln+'</td></tr><tr><td><b>Position:</b> '+s.pos+'</td><td><b>Branch:</b> '+brN(s.br)+'</td></tr><tr><td><b>Tenure:</b> '+tenure(s.sd)+'</td><td><b>Contract:</b> '+(s.ct==='permanent'?'Permanent (ภงด.1)':s.ct)+'</td></tr></table><div class="ds"><div class="dst">Income</div>'+br2+c.rows.map(r=>'<div class="dr"><span>'+r.name+(r.isWHT?' (WHT)':'')+'</span><span>'+fmt(r.net)+' ฿</span></div>').join('')+(c.otA>0?'<div class="dr"><span>OT ('+c.otH+'hrs)</span><span>'+fmt(c.otA)+' ฿</span></div>':'')+(c.bon>0?'<div class="dr"><span>Bonus</span><span>'+fmt(c.bon)+' ฿</span></div>':'')+'<div class="dr tot"><span>Total Income</span><span>'+fmt(c.gross)+' ฿</span></div></div><div class="ds"><div class="dst">Deductions</div>'+ds2+(c.dL>0?'<div class="dr"><span>Leave</span><span>−'+fmt(c.dL)+' ฿</span></div>':'')+(c.adv>0?'<div class="dr"><span>Advance</span><span>−'+fmt(c.adv)+' ฿</span></div>':'')+(c.dO>0?'<div class="dr"><span>Other</span><span>−'+fmt(c.dO)+' ฿</span></div>':'')+'<div class="dr tot"><span>Total Deductions</span><span>−'+fmt(c.sso+c.mT+c.whtD+c.dL+c.adv+c.dO)+' ฿</span></div></div><div style="background:var(--nv);color:#fff;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:8px"><b style="font-size:14px">NET PAY</b><b style="font-size:22px;color:#fde68a">'+fmt(c.net)+' ฿</b></div>'+(s.ct==='permanent'?'<div style="font-size:11px;color:#9ca3af;text-align:right;margin-top:4px">Est. annual tax: '+fmt(c.aT)+' ฿</div>':'')+'<div style="text-align:right;margin-top:22px;font-size:12px;color:#6b7280"><div>Authorized Signatory _______________________</div><div style="margin-top:3px">'+C.sgn+'</div><div>'+new Date().toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'})+'</div></div></div>';}
+function rPS(){const sid=qv('ds-s'),m=parseInt(qv('ds-m')),y=parseInt(qv('ds-y')),key=mkKey(m,y);const area=q('ps-area');if(!sid){area.innerHTML='<div class="no-data">Select a staff member</div>';return}const s=S.find(x=>x.id===sid);if(!s){area.innerHTML='';return}const e=P[key]&&P[key][sid]||{};const c=calcM(s,e,key);const ds2=s.ct==='permanent'?'<div class="dr"><span>SSO (5% × '+fmt(c.bG)+' ฿)</span><span>−'+fmt(c.sso)+' ฿</span></div>'+(c.mT>0?'<div class="dr"><span>Tax ภงด.1</span><span>−'+fmt(c.mT)+' ฿</span></div>':''):'<div class="dr"><span>WHT '+(C.wht||3)+'%</span><span>−'+fmt(c.whtD)+' ฿</span></div>';const br2=s.emptype==='fullparttime'?'<div class="dr"><span>Hours/Days worked</span><span>'+fmt(c.bG)+' ฿</span></div>':'<div class="dr"><span>Base Salary</span><span>'+fmt(c.bG)+' ฿</span></div>';const logoHtml=buildLogoHeader();area.innerHTML='<div class="dprev" id="ps-print">'+logoHtml+'<div class="dhr"><div class="dco">'+C.cth+'</div><div style="font-size:12px;color:#6b7280;margin-top:2px">Pay Slip — '+MTH[m-1]+' '+y+'</div></div><table style="width:100%;font-size:12px;margin-bottom:12px;border-collapse:collapse"><tr><td style="padding:2px 0"><b>ID:</b> '+s.id+'</td><td><b>Name:</b> '+s.fn+' '+s.ln+'</td></tr><tr><td><b>Position:</b> '+s.pos+'</td><td><b>Branch:</b> '+brN(s.br)+'</td></tr><tr><td><b>Tenure:</b> '+tenure(s.sd)+'</td><td><b>Contract:</b> '+(s.ct==='permanent'?'Permanent (ภงด.1)':s.ct)+'</td></tr></table><div class="ds"><div class="dst">Income</div>'+br2+c.rows.map(r=>'<div class="dr"><span>'+r.name+(r.isWHT?' (WHT)':'')+'</span><span>'+fmt(r.net)+' ฿</span></div>').join('')+(c.otA>0?'<div class="dr"><span>OT ('+c.otH+'hrs)</span><span>'+fmt(c.otA)+' ฿</span></div>':'')+(c.bon>0?'<div class="dr"><span>Bonus</span><span>'+fmt(c.bon)+' ฿</span></div>':'')+'<div class="dr tot"><span>Total Income</span><span>'+fmt(c.gross)+' ฿</span></div></div><div class="ds"><div class="dst">Deductions</div>'+ds2+(c.dL>0?'<div class="dr"><span>Leave</span><span>−'+fmt(c.dL)+' ฿</span></div>':'')+(c.adv>0?'<div class="dr"><span>Advance</span><span>−'+fmt(c.adv)+' ฿</span></div>':'')+(c.dO>0?'<div class="dr"><span>Other</span><span>−'+fmt(c.dO)+' ฿</span></div>':'')+'<div class="dr tot"><span>Total Deductions</span><span>−'+fmt(c.sso+c.mT+c.whtD+c.dL+c.adv+c.dO)+' ฿</span></div></div><div style="background:var(--nv);color:#fff;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:8px"><b style="font-size:14px">NET PAY</b><b style="font-size:22px;color:#fde68a">'+fmt(c.net)+' ฿</b></div>'+(s.ct==='permanent'?'<div style="font-size:11px;color:#9ca3af;text-align:right;margin-top:4px">Est. annual tax: '+fmt(c.aT)+' ฿</div>':'')+''+buildSignatureBlock(new Date().toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'}))+'</div>';}
 function rCert(){const sid=qv('dc-s'),ds3=qv('dc-d'),rG=q('dc-rcg').checked,lV=q('dc-liv').checked,sal=q('dc-sal').checked,brId=qv('dc-br');q('cert-br-row').style.display=lV?'block':'none';const area=q('cert-area');if(!sid){area.innerHTML='<div class="no-data">Select a staff member</div>';return}const s=S.find(x=>x.id===sid);if(!s){area.innerHTML='';return}const bO=brO(brId),dd=thDate(ds3),sd2=thDate(s.sd);const cn=bO.certname||bO.name||'';const logoHtml=buildLogoHeader();
 // Text header: clinic info left, company info right
 let hdr='';
@@ -1033,7 +1078,7 @@ const companyBlock='<div style="text-align:right"><div style="font-weight:700">'
 if(rG&&lV)hdr='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:16px;gap:12px">'+clinicBlock+companyBlock+'</div>';
 else if(lV)hdr='<div style="font-size:12px;margin-bottom:16px">'+clinicBlock+'</div>';
 else hdr='<div style="font-size:12px;margin-bottom:16px">'+companyBlock+'</div>';
-area.innerHTML='<div class="dprev" id="cert-print">'+logoHtml+hdr+'<div style="text-align:center;margin-bottom:15px"><div style="font-size:15px;font-weight:700;text-decoration:underline;color:var(--nv)">หนังสือรับรองพนักงาน</div></div><div style="text-align:right;font-size:12px;margin-bottom:14px;color:#6b7280">ออกให้ ณ วันที่ '+dd+'</div><div style="line-height:2.2;font-size:13px"><p>หนังสือฉบับนี้ออกให้เพื่อรับรองว่า <b>'+s.fn+' '+s.ln+'</b> เป็นพนักงานของ'+C.cth+'</p><p>ตำแหน่ง <b>'+s.pos+' · '+s.dept+'</b></p>'+(lV&&cn?'<p>ที่'+cn+'</p>':'')+(sal&&s.emptype==='fulltime'?'<p>มีอัตราเงินเดือนล่าสุด <b>'+fmt(s.base)+' บาทต่อเดือน</b> (ไม่รวมค่าคอมมิชชั่น)</p>':'')+'<p>เริ่มงาน '+sd2+' จนถึงปัจจุบัน</p><p>อายุงาน: '+tenure(s.sd)+'</p><p>จึงเรียนมาเพื่อทราบ</p></div><div style="text-align:center;margin-top:32px;font-size:12px"><div>____________________________</div><div style="margin-top:4px">'+C.sgn+'</div><div>'+dd+'</div></div></div>';}
+area.innerHTML='<div class="dprev" id="cert-print">'+logoHtml+hdr+'<div style="text-align:center;margin-bottom:15px"><div style="font-size:15px;font-weight:700;text-decoration:underline;color:var(--nv)">หนังสือรับรองพนักงาน</div></div><div style="text-align:right;font-size:12px;margin-bottom:14px;color:#6b7280">ออกให้ ณ วันที่ '+dd+'</div><div style="line-height:2.2;font-size:13px"><p>หนังสือฉบับนี้ออกให้เพื่อรับรองว่า <b>'+s.fn+' '+s.ln+'</b> เป็นพนักงานของ'+C.cth+'</p><p>ตำแหน่ง <b>'+s.pos+' · '+s.dept+'</b></p>'+(lV&&cn?'<p>ที่'+cn+'</p>':'')+(sal&&s.emptype==='fulltime'?'<p>มีอัตราเงินเดือนล่าสุด <b>'+fmt(s.base)+' บาทต่อเดือน</b> (ไม่รวมค่าคอมมิชชั่น)</p>':'')+'<p>เริ่มงาน '+sd2+' จนถึงปัจจุบัน</p><p>อายุงาน: '+tenure(s.sd)+'</p><p>จึงเรียนมาเพื่อทราบ</p></div>'+buildSignatureBlock(dd)+'</div>';}
 function doPrint(id){const el=document.getElementById(id);if(!el){alert('Please select a staff member first');return}const w=window.open('','_blank');w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet"><title>RCG</title><style>body{font-family:\'Sarabun\',sans-serif;padding:28px;font-size:13px;color:#1a1a2e;max-width:600px;margin:auto}.dr{display:flex;justify-content:space-between;padding:3px 0}.dr.tot{border-top:1.5px solid #374151;font-weight:700;margin-top:4px;padding-top:4px}@media print{@page{margin:18mm}body{padding:0}}</style></head><body>'+el.outerHTML+'<scr'+'ipt>window.onload=()=>setTimeout(()=>window.print(),500)<\/scr'+'ipt></body></html>');w.document.close();}
 
 function rBrCards(){q('branch-cards').innerHTML=B.map(b=>'<div class="branch-card"><div class="fx jb ic" style="margin-bottom:8px"><div style="font-weight:700;font-size:14px"><i class="ti ti-building" style="margin-right:7px;color:var(--nv)"></i>'+b.name+'</div><button class="btn bo bsm edit-br-btn" data-id="'+b.id+'"><i class="ti ti-edit"></i>Edit</button></div><div class="g2" style="font-size:12.5px;gap:7px;color:#6b7280">'+(b.addr?'<div>'+b.addr+'</div>':'<div>No address</div>')+'<div>'+(b.lic?'License: '+b.lic:'-')+(b.tel?' · '+b.tel:'')+'</div></div>'+(b.certname?'<div style="font-size:11.5px;color:#9ca3af;margin-top:4px">Cert: '+b.certname+'</div>':'')+'</div>').join('');document.querySelectorAll('.edit-br-btn').forEach(btn=>btn.addEventListener('click',function(){openBM(this.dataset.id);}));}
@@ -1085,18 +1130,41 @@ function rLogoSettings(){
     if(img){
       prev.innerHTML='<img src="'+img+'" style="max-height:70px;max-width:100%;object-fit:contain;border-radius:4px">';
       rem.style.display='block';
-      dz.style.borderColor='#6ee7b7';dz.style.borderStyle='solid';
+      if(dz){dz.style.borderColor='#6ee7b7';dz.style.borderStyle='solid';}
     } else {
       prev.innerHTML='<div style="color:#d1d5db;font-size:12px"><i class="ti ti-photo" style="font-size:28px;display:block;margin-bottom:4px"></i>No logo uploaded</div>';
       rem.style.display='none';
-      dz.style.borderColor='#e5e7eb';dz.style.borderStyle='dashed';
+      if(dz){dz.style.borderColor='#e5e7eb';dz.style.borderStyle='dashed';}
     }
   });
+  rSigStampSettings();
   rLogoPreview();
 }
 
+function rSigStampSettings(){
+  ['sig','stamp'].forEach(k=>{
+    const img=SIGSTAMP[k];
+    const prev=document.getElementById(k+'-preview');
+    const rem=document.getElementById(k+'-remove');
+    const dz=document.getElementById(k+'-dropzone');
+    if(!prev)return;
+    if(img){
+      prev.innerHTML='<img src="'+img+'" style="max-height:70px;max-width:100%;object-fit:contain;border-radius:4px">';
+      rem.style.display='block';
+      if(dz){dz.style.borderColor='#6ee7b7';dz.style.borderStyle='solid';}
+    } else {
+      const icon=k==='sig'?'ti-writing-sign':'ti-rosette';
+      const txt=k==='sig'?'No signature uploaded':'No stamp uploaded';
+      prev.innerHTML='<div style="color:#d1d5db;font-size:12px"><i class="ti '+icon+'" style="font-size:28px;display:block;margin-bottom:4px"></i>'+txt+'</div>';
+      rem.style.display='none';
+      if(dz){dz.style.borderColor='#e5e7eb';dz.style.borderStyle='dashed';}
+    }
+  });
+}
+
+function removeSigStamp(k){SIGSTAMP[k]=null;svSS();rSigStampSettings();}
+
 function rDocLogoModeUI(){
-  // Sync radio buttons on the Documents page
   const mode=LOGOS.mode||'rcg';
   const r=document.querySelector('input[name="doc-logo-mode"][value="'+mode+'"]');
   if(r)r.checked=true;
@@ -1106,6 +1174,8 @@ function rDocLogoModeUI(){
     l.style.background=inp&&inp.checked?'#eff6ff':'#fff';
     l.style.color=inp&&inp.checked?'var(--nv)':'#374151';
   });
+  const sc=document.getElementById('doc-show-stamp');
+  if(sc)sc.checked=SIGSTAMP.showStamp!==false;
 }
 
 function rLogoPreview(){
@@ -1117,19 +1187,32 @@ function rLogoPreview(){
 function buildLogoHeader(mode){
   mode=mode||LOGOS.mode||'rcg';
   if(mode==='none')return'';
-  // RCG logo = top-LEFT, Clinic logo = top-RIGHT
-  const rcg=LOGOS.rcg,cli=LOGOS.clinic;
+  // KEY FIX: upload zones are swapped in UI so 'clinic' key = RCG logo (left), 'rcg' key = Clinic logo (right)
+  const left=LOGOS.clinic, right=LOGOS.rcg;
   if(mode==='rcg'){
-    if(!rcg)return'';
-    return'<div style="display:flex;justify-content:flex-start;align-items:center;margin-bottom:10px"><img src="'+rcg+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
+    if(!left)return'';
+    return'<div style="display:flex;justify-content:flex-start;align-items:center;margin-bottom:10px"><img src="'+left+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
   }
   if(mode==='both'){
-    if(!rcg&&!cli)return'';
-    if(rcg&&!cli)return'<div style="display:flex;justify-content:flex-start;align-items:center;margin-bottom:10px"><img src="'+rcg+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
-    if(!rcg&&cli)return'<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px"><img src="'+cli+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
-    return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><img src="'+rcg+'" style="max-height:52px;max-width:140px;object-fit:contain"><img src="'+cli+'" style="max-height:52px;max-width:140px;object-fit:contain"></div>';
+    if(!left&&!right)return'';
+    if(left&&!right)return'<div style="display:flex;justify-content:flex-start;align-items:center;margin-bottom:10px"><img src="'+left+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
+    if(!left&&right)return'<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px"><img src="'+right+'" style="max-height:52px;max-width:160px;object-fit:contain"></div>';
+    return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><img src="'+left+'" style="max-height:52px;max-width:140px;object-fit:contain"><img src="'+right+'" style="max-height:52px;max-width:140px;object-fit:contain"></div>';
   }
   return'';
+}
+
+function buildSignatureBlock(dateStr){
+  const showStamp=SIGSTAMP.showStamp!==false;
+  const hasSig=!!SIGSTAMP.sig, hasStamp=!!SIGSTAMP.stamp&&showStamp;
+  const sigContent=hasSig
+    ?'<img src="'+SIGSTAMP.sig+'" style="max-height:52px;max-width:150px;object-fit:contain;display:block;margin:0 auto 2px">'
+    :'<div style="border-bottom:1.5px solid #9ca3af;width:150px;margin:0 auto 6px"></div>';
+  const sigBlock='<div style="text-align:center;font-size:12px;color:#6b7280">'+sigContent+'<div style="font-weight:600;color:#374151">'+C.sgn+'</div><div style="margin-top:2px">'+dateStr+'</div></div>';
+  if(hasStamp){
+    return'<div style="display:flex;align-items:flex-end;justify-content:flex-end;gap:20px;margin-top:24px">'+sigBlock+'<div><img src="'+SIGSTAMP.stamp+'" style="max-height:80px;max-width:80px;object-fit:contain;opacity:.9"></div></div>';
+  }
+  return'<div style="display:flex;justify-content:flex-end;margin-top:24px">'+sigBlock+'</div>';
 }
 
 function removeLogo(k){LOGOS[k]=null;svL();rLogoSettings();}
@@ -1146,15 +1229,26 @@ function initLogoHandlers(){
       rd.readAsDataURL(f);
     });
   });
-  // Wire the Documents page logo-mode radios
+  ['sig','stamp'].forEach(k=>{
+    const inp=document.getElementById(k+'-input');
+    if(!inp)return;
+    inp.addEventListener('change',function(){
+      const f=this.files[0];if(!f)return;
+      if(f.size>2*1024*1024){alert('File too large (max 2MB)');return;}
+      const rd=new FileReader();
+      rd.onload=e=>{SIGSTAMP[k]=e.target.result;svSS();rSigStampSettings();};
+      rd.readAsDataURL(f);
+    });
+  });
   document.querySelectorAll('input[name="doc-logo-mode"]').forEach(r=>{
     r.addEventListener('change',function(){
       LOGOS.mode=this.value;svL();
-      rDocLogoModeUI();
-      rLogoPreview();
-      // Re-render open document if any
-      rPS();rCert();
+      rDocLogoModeUI();rLogoPreview();rPS();rCert();
     });
+  });
+  const sc=document.getElementById('doc-show-stamp');
+  if(sc)sc.addEventListener('change',function(){
+    SIGSTAMP.showStamp=this.checked;svSS();rPS();rCert();
   });
 }
 
