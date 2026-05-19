@@ -464,6 +464,24 @@ input:checked+.slider:before{transform:translateX(18px)}
     <div id="tier-rows"></div>
     <button class="btn bo bsm mt8" id="btn-atier"><i class="ti ti-plus"></i>Add Tier</button>
   </div>
+  <div class="dv"></div>
+  <div class="fx jb ic" style="margin-bottom:7px">
+    <div class="st" style="margin:0;border:none;padding:0">6-Month Incentive</div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:600">
+      <input type="checkbox" id="s-has6m" style="accent-color:var(--nv);width:15px;height:15px"> Enable
+    </label>
+  </div>
+  <div id="s-6m-fields" style="display:none">
+    <div class="ts tm" style="margin-bottom:10px">Accumulated revenue over 6 months (minus MKT cost) × tiered rate. Paid automatically every 6 months — Jan–Jun pays Jul, Jul–Dec pays Jan.</div>
+    <div style="margin-bottom:10px">
+      <div class="fr"><label>Label</label>
+        <input id="s-6mlabel" type="text" placeholder="e.g. 6M Marketing Incentive">
+      </div>
+    </div>
+    <div class="ts tm" style="margin-bottom:6px;font-weight:700;color:#374151">Tiered Rate on Net Revenue (฿)</div>
+    <div id="s-6m-tier-rows" style="margin-bottom:6px"></div>
+    <button class="btn bo bsm" id="btn-add6mtier" type="button"><i class="ti ti-plus"></i>Add Tier</button>
+  </div>
   <div class="fx g8 jb mt16">
     <button class="btn bx bsm" id="btn-del-staff" style="display:none"><i class="ti ti-trash"></i>Delete</button>
     <div class="fx g8"><button class="btn bo" id="btn-cancel-staff">Cancel</button><button class="btn bp" id="btn-save-staff"><i class="ti ti-check"></i>Save</button></div>
@@ -744,6 +762,8 @@ function openAdd(){
   q('s-emptype').value='fulltime';q('s-ct').value='permanent';q('s-st').value='Active';q('s-pttype').value='parttime';q('s-fptmethod').value='hourly';
   q('s-sd').value=new Date().toISOString().split('T')[0];
   q('items-body').innerHTML='';q('tier-area').style.display='none';
+  q('s-has6m').checked=false;q('s-6m-fields').style.display='none';
+  q('s-6m-tier-rows').innerHTML='';q('s-6mlabel').value='';
   popDeptDl();popBrDl();syncS();openM('sm');
 }
 function openEdit(id){
@@ -760,6 +780,12 @@ try{
   q('s-hrrate').value=s.hrrate||'';q('s-fptmethod').value=s.fptmethod||'hourly';q('s-fptdayrate').value=s.fptdayrate||'';
   q('s-pttype').value=s.pttype||'parttime';q('s-dhrrate').value=s.hrrate||'';q('s-dhrs').value=s.dhrs||7;q('s-df').value=s.df||'';q('s-dayrate').value=s.dayrate||'';
   q('items-body').innerHTML='';(s.items||[]).forEach(addItemWith);checkTA();
+  // 6m incentive
+  const has6m=!!(s.incentive6m&&s.incentive6m.enabled);
+  q('s-has6m').checked=has6m;q('s-6m-fields').style.display=has6m?'block':'none';
+  q('s-6mcycle')&&(q('s-6mcycle').value=(s.incentive6m&&s.incentive6m.cycle)||'1');
+  q('s-6mlabel').value=(s.incentive6m&&s.incentive6m.label)||'';
+  apply6mTiers(s.incentive6m&&s.incentive6m.tiers);
   popDeptDl();popBrDl();syncS();openM('sm');
 }catch(err){console.error('openEdit error:',err);alert('Edit error: '+err.message);}
 }
@@ -769,6 +795,10 @@ q('btn-del-staff').addEventListener('click',()=>{if(!_eSid||!confirm('Delete?'))
 q('btn-save-staff').addEventListener('click',saveStaff);
 q('btn-aitem').addEventListener('click',()=>addItemWith(null));
 q('btn-atier').addEventListener('click',addTierRow);
+
+// 6-month incentive toggle
+q('s-has6m').addEventListener('change',function(){q('s-6m-fields').style.display=this.checked?'block':'none';});
+q('btn-add6mtier').addEventListener('click',function(){add6mTierRow(null);});
 
 const ITYPES={
   fixed:'Fixed (฿/month)',
@@ -843,6 +873,39 @@ function checkTA(){/* tiers now handled per-item row */}
 function renderTiers(tiers){q('tier-rows').innerHTML='';tiers.forEach(t=>{const d=document.createElement('div');d.className='tier-row';d.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:6px';d.innerHTML='<input type="number" value="'+t.f+'" class="tf" placeholder="From" style="font-size:12px;flex:1"><input type="number" value="'+(t.t===9999999?'':t.t)+'" class="tt" placeholder="To" style="font-size:12px;flex:1"><input type="number" value="'+t.r+'" class="trr" step="0.1" placeholder="%" style="font-size:12px;width:65px"><button class="btn bo bsm" style="padding:3px 7px" type="button">×</button>';d.querySelector('button').addEventListener('click',()=>d.remove());q('tier-rows').appendChild(d);});}
 function addTierRow(){const d=document.createElement('div');d.className='tier-row';d.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:6px';d.innerHTML='<input type="number" class="tf" placeholder="From" style="font-size:12px;flex:1"><input type="number" class="tt" placeholder="To" style="font-size:12px;flex:1"><input type="number" class="trr" step="0.1" placeholder="%" style="font-size:12px;width:65px"><button class="btn bo bsm" style="padding:3px 7px" type="button">×</button>';d.querySelector('button').addEventListener('click',()=>d.remove());q('tier-rows').appendChild(d);}
 function getTiers(){return[...document.querySelectorAll('.tier-row')].map(r=>({f:parseFloat(r.querySelector('.tf').value)||0,t:parseFloat(r.querySelector('.tt').value)||9999999,r:parseFloat(r.querySelector('.trr').value)||0})).filter(t=>t.r>0)}
+
+// ── 6-MONTH INCENTIVE TIER HELPERS ──
+function add6mTierRow(tier){
+  const cont=q('s-6m-tier-rows');
+  const d=document.createElement('div');
+  d.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:6px';
+  d.innerHTML='<input type="number" value="'+(tier?tier.f||0:0)+'" class="t6f" placeholder="From ฿" style="font-size:12px;flex:1;padding:5px 7px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">'+
+    '<input type="number" value="'+(tier&&tier.t!==9999999?tier.t:'')+'" class="t6t" placeholder="To ฿" style="font-size:12px;flex:1;padding:5px 7px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">'+
+    '<input type="number" value="'+(tier?tier.r||'':'')+'" class="t6r" step="0.01" placeholder="Rate %" style="font-size:12px;width:80px;padding:5px 7px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">'+
+    '<button type="button" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--color-text-secondary);padding:2px 5px">×</button>';
+  d.querySelector('button').addEventListener('click',()=>d.remove());
+  cont.appendChild(d);
+}
+function get6mTiers(){
+  return[...q('s-6m-tier-rows').querySelectorAll('div')].map(d=>({
+    f:parseFloat(d.querySelector('.t6f').value)||0,
+    t:parseFloat(d.querySelector('.t6t').value)||9999999,
+    r:parseFloat(d.querySelector('.t6r').value)||0
+  })).filter(x=>x.r>0);
+}
+function apply6mTiers(tiers){
+  q('s-6m-tier-rows').innerHTML='';
+  (tiers||[]).forEach(t=>add6mTierRow(t));
+  if(!tiers||!tiers.length){
+    [{f:0,t:499999,r:1},{f:500000,t:999999,r:1.5},{f:1000000,t:9999999,r:2}].forEach(t=>add6mTierRow(t));
+  }
+}
+function calc6mTiered(net,tiers){
+  if(!net||!tiers||!tiers.length)return 0;
+  let result=0;
+  for(const t of tiers){if(net>=t.f)result=net*(t.r/100);}
+  return result;
+}
 function getItems(){
   const rows=[...q('items-body').querySelectorAll('tr:not(.tier-sub-row)')];
   return rows.map(tr=>{
@@ -869,7 +932,8 @@ function getItems(){
 }
 function saveStaff(){
   const et=qv('s-emptype'),brTxt=qv('s-br-txt').trim(),mb=B.find(x=>x.name===brTxt);
-  const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:qv('s-ct'),st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0};
+  const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:qv('s-ct'),st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0,
+    incentive6m:q('s-has6m').checked?{enabled:true,label:qv('s-6mlabel').trim()||'6M Incentive',tiers:get6mTiers()}:{enabled:false}};
   if(_eSid){const i=S.findIndex(x=>x.id===_eSid);if(i>=0)S[i]=ns;else S.push(ns);}else S.push(ns);
   svS();closeM('sm');rStaff();rDeptF();
 }
@@ -918,7 +982,7 @@ function buildCard(s,e,key){
     '<div class="fbox ded" style="grid-column:span 2"><label>📋 Leave Deduction (auto-calculated) <span style="color:#e24b4a;font-weight:600" id="leave-preview-'+s.id+'">'+(c.dL>0?'− '+fmt(c.dL)+' ฿ ('+fmt(c.dailyRate)+' ฿/day · '+fmt(c.hourlyRate)+' ฿/hr)':'Enter days/hours above')+'</span></label></div>'+
     '<div class="fbox ded"><label>➖ Other Deductions (กยศ.X</label><input type="number" id="pr-doth-'+s.id+'" value="'+(e.dOth||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>'+
     '</div>';
-  return'<div class="spc'+(done?' done':'')+'" id="spc-'+s.id+'"><div class="spc-head"><div class="av" style="width:36px;height:36px;font-size:14px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+s.nn+' '+s.fn+(done?' <i class="ti ti-circle-check" style="color:var(--ok);font-size:17px"></i>':'')+'</div><div class="ts tm">'+s.dept+' · '+brN(s.br)+'</div></div><div style="text-align:right;margin-right:8px"><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase">Net Pay</div><div style="font-size:20px;font-weight:800;color:var(--nv)" id="snet-'+s.id+'">'+fmt(c.net)+' ฿</div></div>'+empBadge(s)+' '+tx+'</div><div class="spc-body">'+(advP.length?'<div style="background:#fef3c7;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px;border:1px solid #fcd34d"><i class="ti ti-credit-card"></i>Advance pending: <b>'+fmt(c.adv)+' ฿</b></div>':'')+'<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px"><i class="ti ti-plus" style="font-size:12px"></i> Income</div>'+inc+(dilIt.length?'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-toggle-right" style="font-size:12px"></i> เบี้ยขยัน</div>'+dil:'')+'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-minus" style="font-size:12px"></i> Deductions</div>'+ded+'<div id="acct-'+s.id+'">'+buildAcct(s,c)+'</div></div></div>';
+  return'<div class="spc'+(done?' done':'')+'" id="spc-'+s.id+'"><div class="spc-head"><div class="av" style="width:36px;height:36px;font-size:14px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+s.nn+' '+s.fn+(done?' <i class="ti ti-circle-check" style="color:var(--ok);font-size:17px"></i>':'')+'</div><div class="ts tm">'+s.dept+' · '+brN(s.br)+'</div></div><div style="text-align:right;margin-right:8px"><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase">Net Pay</div><div style="font-size:20px;font-weight:800;color:var(--nv)" id="snet-'+s.id+'">'+fmt(c.net)+' ฿</div></div>'+empBadge(s)+' '+tx+'</div><div class="spc-body">'+(advP.length?'<div style="background:#fef3c7;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px;border:1px solid #fcd34d"><i class="ti ti-credit-card"></i>Advance pending: <b>'+fmt(c.adv)+' ฿</b></div>':'')+'<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px"><i class="ti ti-plus" style="font-size:12px"></i> Income</div>'+inc+(dilIt.length?'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-toggle-right" style="font-size:12px"></i> เบี้ยขยัน</div>'+dil:'')+'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-minus" style="font-size:12px"></i> Deductions</div>'+ded+'<div id="acct-'+s.id+'">'+buildAcct(s,c)+'</div>'+build6mBlock(s,key)+'</div></div>';
 }
 function buildAcct(s,c){
   let h='<div class="acct"><div class="ar sh">Income</div>';
@@ -984,6 +1048,17 @@ function copyPaySummary(sid){
     </tr>`;
   };
 
+  // Build revenue info block — show raw revenue inputs (only if staff has revenue-based items)
+  const hasRevItems=(s.items||[]).some(i=>['comm_flat','comm_tiered','comm_tiered_fixed'].includes(i.type));
+  const hasMktItems=(s.items||[]).some(i=>i.type==='pct_rev');
+  let revBlockHtml='';
+  if(hasRevItems&&c.rev>0){
+    const revLines=[];
+    revLines.push(`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0"><span style="font-size:13px;color:#374151">📊 Revenue</span><span style="font-size:13px;font-weight:700;color:#1e3a5f">${fmt(c.rev)} ฿</span></div>`);
+    if(hasMktItems&&(parseFloat(e.mkt)||0)>0)revLines.push(`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0"><span style="font-size:12px;color:#9ca3af">📉 MKT Cost</span><span style="font-size:12px;color:#e24b4a">−${fmt(parseFloat(e.mkt)||0)} ฿</span></div>`);
+    revBlockHtml=`<div style="background:#eff6ff;padding:10px 16px;border-bottom:1px solid #dbeafe">${revLines.join('')}</div>`;
+  }
+
   const sectionHdr=label=>`<tr style="background:#f8fafc"><td colspan="2" style="padding:6px 12px;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.8px">${label}</td></tr>`;
 
   const html=`<div style="font-family:'Sarabun',sans-serif;background:#fff;border-radius:16px;padding:0;width:380px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10)">
@@ -992,6 +1067,7 @@ function copyPaySummary(sid){
       <div style="font-size:18px;font-weight:800;color:#fff">${s.nn} ${s.fn}</div>
       <div style="font-size:12px;color:#93c5fd;margin-top:2px">${s.pos} · ${period}</div>
     </div>
+    ${revBlockHtml}
     <table style="width:100%;border-collapse:collapse;background:#fff">
       ${sectionHdr('INCOME')}
       ${incRows.map(renderRow).join('')}
@@ -1053,6 +1129,133 @@ function showCopyFail(btn,canvas){
     if(btn){btn.innerHTML='<i class="ti ti-alert-triangle" style="font-size:14px"></i> Failed';btn.disabled=false;}
   }
   setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-clipboard" style="font-size:14px"></i>Copy Summary';btn.style.background='#f0fdf4';btn.style.borderColor='#bbf7d0';}},2500);
+}
+function build6mBlock(s,key){
+  const i6=s.incentive6m;
+  if(!i6||!i6.enabled)return'';
+  const [y,m]=[parseInt(key.split('_')[0]),parseInt(key.split('_')[1])];
+  const label=i6.label||'6M Incentive';
+
+  // Both cycles always active — set once, repeats forever
+  // Cycle A: Jan–Jun (months 1–6) → payout July
+  // Cycle B: Jul–Dec (months 7–12) → payout January
+  const isPayJul=(m===7);
+  const isPayJan=(m===1);
+  const isPayMonth=isPayJul||isPayJan;
+
+  let cycleMonths,cycleLabel,payLabel;
+  if(isPayJul){
+    cycleMonths=[1,2,3,4,5,6];cycleLabel='Jan–Jun '+y;payLabel='Pay Jul '+y;
+  } else if(isPayJan){
+    cycleMonths=[7,8,9,10,11,12];cycleLabel='Jul–Dec '+(y-1);payLabel='Pay Jan '+y;
+  } else {
+    const inFirstHalf=m<=6;
+    cycleMonths=inFirstHalf?[1,2,3,4,5,6]:[7,8,9,10,11,12];
+    cycleLabel=inFirstHalf?'Jan–Jun '+y:'Jul–Dec '+y;
+    payLabel=inFirstHalf?'Pay Jul '+y:'Pay Jan '+(y+1);
+  }
+
+  let accumulated=0,monthCount=0;
+  cycleMonths.forEach(cm=>{
+    const ck=mkKey(cm,isPayJan?(y-1):y);
+    const ep=P[ck]&&P[ck][s.id];
+    const rv=ep?parseFloat(ep.rev)||0:0;
+    const mk=ep?parseFloat(ep.mkt)||0:0;
+    if(rv>0){accumulated+=(rv-mk);monthCount++;}
+  });
+
+  if(isPayMonth){
+    const storedMkt=P[key]&&P[key][s.id]&&P[key][s.id]['_6mmkt']!==undefined?P[key][s.id]['_6mmkt']:'';
+    const mktVal=parseFloat(storedMkt)||0;
+    const netRev=Math.max(0,accumulated-mktVal);
+    const incentiveAmt=calc6mTiered(netRev,i6.tiers);
+    const tierBreakdown=(i6.tiers||[]).map(t=>'฿'+fmt(t.f)+'–'+(t.t===9999999?'∞':'฿'+fmt(t.t))+' → '+t.r+'%').join(' · ');
+    return'<div id="6m-block-'+s.id+'" style="margin-top:12px;background:linear-gradient(135deg,#fefce8,#fef3c7);border:1.5px solid #fcd34d;border-radius:10px;padding:14px 16px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+      '<div style="font-size:12px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.5px">🏆 '+label+' — PAYOUT</div>'+
+      '<div style="font-size:10px;color:#b45309">'+cycleLabel+' · '+payLabel+'</div></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:#78350f;margin-bottom:4px"><span>Accumulated Revenue ('+monthCount+'/6 months)</span><span style="font-weight:700">'+fmt(accumulated)+' ฿</span></div>'+
+      '<div style="font-size:11px;color:#b45309;margin-bottom:8px">Tiers: '+tierBreakdown+'</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+
+      '<label style="font-size:12px;color:#78350f;white-space:nowrap;font-weight:600">MKT Cost Deduction (฿):</label>'+
+      '<input type="number" id="6m-mkt-'+s.id+'" value="'+(mktVal||'')+'" placeholder="0" style="flex:1;padding:5px 8px;border:1px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb;color:#78350f" oninput="upd6mCalc(\''+s.id+'\',\''+key+'\')">'+
+      '</div>'+
+      '<div id="6m-result-'+s.id+'" style="display:flex;justify-content:space-between;align-items:center;background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
+      '<div style="font-size:12px;color:#78350f"><div>Net Revenue: <b>'+fmt(netRev)+' ฿</b></div><div style="color:#b45309;margin-top:2px">Incentive ('+calc6mRate(netRev,i6.tiers)+'%): <b style="color:#92400e">'+fmt(incentiveAmt)+' ฿</b></div></div>'+
+      '<button onclick="apply6mPayout(\''+s.id+'\',\''+key+'\')" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Apply to Payroll</button>'+
+      '</div></div>';
+  } else {
+    const pct=Math.round(monthCount/6*100);
+    return'<div style="margin-top:12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+      '<div style="font-size:12px;font-weight:700;color:#374151">📈 '+label+'</div>'+
+      '<div style="font-size:11px;color:#9ca3af">'+cycleLabel+' · '+payLabel+'</div></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:#6b7280;margin-bottom:6px">'+
+      '<span>Month '+monthCount+'/6 · Accumulated Net Revenue</span><span style="font-weight:700;color:#374151">'+fmt(accumulated)+' ฿</span></div>'+
+      '<div style="background:#e5e7eb;border-radius:4px;height:6px"><div style="background:var(--nv);border-radius:4px;height:6px;width:'+pct+'%;transition:width .4s"></div></div>'+
+      '</div>';
+  }
+}
+
+function calc6mRate(net,tiers){
+  if(!net||!tiers||!tiers.length)return 0;
+  let r=0;for(const t of tiers){if(net>=t.f)r=t.r;}return r;
+}
+
+function upd6mCalc(sid,key){
+  const s=S.find(x=>x.id===sid);if(!s||!s.incentive6m)return;
+  const mktInput=q('6m-mkt-'+sid);
+  const mktVal=parseFloat(mktInput?mktInput.value:0)||0;
+  // Save MKT to entry
+  if(!P[key])P[key]={};if(!P[key][sid])P[key][sid]={sid};
+  P[key][sid]['_6mmkt']=mktVal;svP();
+  // Recalculate
+  const cycle=s.incentive6m.cycle||1;
+  const cycleMonths=cycle===1?[1,2,3,4,5,6]:[7,8,9,10,11,12];
+  let accumulated=0;
+  cycleMonths.forEach(cm=>{
+    const ck=mkKey(cm,cycle===1?parseInt(key.split('_')[0]):(cm>=7?parseInt(key.split('_')[0]):parseInt(key.split('_')[0])+1));
+    const ep=P[ck]&&P[ck][sid];
+    const rv=ep?parseFloat(ep.rev)||0:0;const mk=ep?parseFloat(ep.mkt)||0:0;
+    if(rv>0)accumulated+=(rv-mk);
+  });
+  const netRev=Math.max(0,accumulated-mktVal);
+  const amt=calc6mTiered(netRev,s.incentive6m.tiers);
+  const rate=calc6mRate(netRev,s.incentive6m.tiers);
+  const res=q('6m-result-'+sid);
+  if(res)res.innerHTML='<div style="font-size:12px;color:#78350f"><div>Net Revenue: <b>'+fmt(netRev)+' ฿</b></div><div style="color:#b45309;margin-top:2px">Incentive ('+rate+'%): <b style="color:#92400e">'+fmt(amt)+' ฿</b></div></div><button onclick="apply6mPayout(\''+sid+'\',\''+key+'\')" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Apply to Payroll</button>';
+}
+
+function apply6mPayout(sid,key){
+  const s=S.find(x=>x.id===sid);if(!s||!s.incentive6m)return;
+  const mktInput=q('6m-mkt-'+sid);
+  const mktVal=parseFloat(mktInput?mktInput.value:0)||0;
+  const cycle=s.incentive6m.cycle||1;
+  const cycleMonths=cycle===1?[1,2,3,4,5,6]:[7,8,9,10,11,12];
+  let accumulated=0;
+  const y=parseInt(key.split('_')[0]);
+  cycleMonths.forEach(cm=>{
+    const ck=mkKey(cm,cycle===1?y:(cm>=7?y:y+1));
+    const ep=P[ck]&&P[ck][sid];
+    const rv=ep?parseFloat(ep.rev)||0:0;const mk=ep?parseFloat(ep.mkt)||0:0;
+    if(rv>0)accumulated+=(rv-mk);
+  });
+  const netRev=Math.max(0,accumulated-mktVal);
+  const amt=calc6mTiered(netRev,s.incentive6m.tiers);
+  if(amt<=0){alert('Calculated incentive is 0. Please check revenue data and MKT cost.');return;}
+  if(!P[key])P[key]={};if(!P[key][sid])P[key][sid]={sid};
+  const prev=parseFloat(P[key][sid].bonus)||0;
+  P[key][sid].bonus=(prev+amt);
+  P[key][sid]['_6mmkt']=mktVal;
+  svP();
+  // Re-render this card
+  const e=P[key][sid];
+  const c=calcM(s,e,key);e.net=c.net;
+  const el=q('snet-'+sid);if(el)el.textContent=fmt(c.net)+' ฿';
+  const ae=q('acct-'+sid);if(ae)ae.innerHTML=buildAcct(s,c);
+  const block=q('6m-block-'+sid);
+  if(block)block.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:#16a34a;font-size:13px;font-weight:700"><i class="ti ti-circle-check"></i>'+s.incentive6m.label+' '+fmt(amt)+' ฿ applied to Bonus!</div>';
+  const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');updJump(act,key);updTopbar(act,key);
 }
 function togDil(sid,iid,key,cb){if(!P[key])P[key]={};if(!P[key][sid])P[key][sid]={sid,diligence:{}};if(!P[key][sid].diligence)P[key][sid].diligence={};P[key][sid].diligence[iid]=cb.checked;const row=q('dr-'+sid+'-'+iid);if(row)row.className='toggle-row'+(cb.checked?' on':'');const s=S.find(x=>x.id===sid);if(!s)return;const e=P[key][sid];const c=calcM(s,e,key);e.net=c.net;const el=q('snet-'+sid);if(el)el.textContent=fmt(c.net)+' ฿';const ae=q('acct-'+sid);if(ae)ae.innerHTML=buildAcct(s,c);const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');updJump(act,key);updTopbar(act,key);}
 function gatherE(sid){const gval=id=>{const el=q(id+'-'+sid);return el?parseFloat(el.value)||0:0};const s=S.find(x=>x.id===sid);const periodic={};(s?s.items||[]:[]).filter(i=>i.type==='periodic').forEach(i=>{const el=q('pi-'+sid+'-'+i.id);if(el)periodic[i.id]=parseFloat(el.value)||0});const ek=Object.keys(P).find(k=>P[k]&&P[k][sid]);const diligence=(ek&&P[ek][sid])?P[ek][sid].diligence||{}:{};// Read period working days override per dept (stored in P[key].deptOverrides)
