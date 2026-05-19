@@ -129,6 +129,7 @@ input:checked+.slider:before{transform:translateX(18px)}
 .cbf{height:100%;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;transition:width .5s}
 .cbv{font-size:11px;font-weight:600;color:#fff;white-space:nowrap}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -933,12 +934,125 @@ function buildAcct(s,c){
   h+='<div class="ar sub"><span class="lbl">Gross Income</span><span class="amt">'+fmt(c.gross)+' ฿</span></div><div class="ar sh">Deductions</div>';
   if(s.ct==='permanent'){h+='<div class="ar ded"><span class="lbl">SSO (5% × '+fmt(c.effBase||c.bG)+' ฿)</span><span class="amt">−'+fmt(c.sso)+' ฿</span></div>';if(c.mT>0)h+='<div class="ar ded"><span class="lbl">Income Tax ภงด.1</span><span class="amt">−'+fmt(c.mT)+' ฿</span></div>';}
   else h+='<div class="ar ded"><span class="lbl">WHT '+(C.wht||3)+'%</span><span class="amt">−'+fmt(c.whtD)+' ฿</span></div>';
-  // Leave already shown before gross above
   if(c.adv>0)h+='<div class="ar ded"><span class="lbl">Advance</span><span class="amt">−'+fmt(c.adv)+' ฿</span></div>';
   if(c.dO>0)h+='<div class="ar ded"><span class="lbl">Other</span><span class="amt">−'+fmt(c.dO)+' ฿</span></div>';
   h+='<div class="ar net"><span class="lbl">NET PAY</span><span class="amt">'+fmt(c.net)+' ฿</span></div></div>';
   if(s.ct==='permanent'&&c.aT>0)h+='<div style="font-size:10px;color:#9ca3af;text-align:right;margin-top:4px">Est. annual tax: '+fmt(c.aT)+' ฿</div>';
+  // Copy button
+  h+='<div style="text-align:right;margin-top:10px"><button onclick="copyPaySummary(\''+s.id+'\')" id="cpybtn-'+s.id+'" style="display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background=\'#dcfce7\'" onmouseout="this.style.background=\'#f0fdf4\'"><i class="ti ti-clipboard" style="font-size:14px"></i>Copy Summary</button></div>';
   return h;
+}
+
+function copyPaySummary(sid){
+  const s=S.find(x=>x.id===sid);if(!s)return;
+  const key=mkKey(parseInt(qv('pm')),parseInt(qv('py')));
+  const e=P[key]&&P[key][sid]||{};
+  const c=calcM(s,e,key);
+  const period=qv('pm')+' '+qv('py');
+  const btn=document.getElementById('cpybtn-'+sid);
+
+  // Build clean white card HTML
+  const rows=[];
+  rows.push({label:'Base Salary',amt:fmt(c.bG),type:'income'});
+  if(c.dL>0){
+    rows.push({label:'Leave ('+fmt(c.leaveDays)+'d '+fmt(c.leaveHrs)+'hrs)',amt:'−'+fmt(c.dLbase),type:'ded'});
+    if(c.dLitems>0)rows.push({label:'Leave − Fixed Items',amt:'−'+fmt(c.dLitems),type:'ded'});
+  }
+  c.rows.forEach(r=>rows.push({label:r.name+(r.isWHT?' (WHT)':''),amt:fmt(r.net),type:'income'}));
+  if(c.otA>0)rows.push({label:'OT ('+c.otH+'hrs)',amt:fmt(c.otA),type:'income'});
+  if(c.bon>0)rows.push({label:'Bonus',amt:fmt(c.bon),type:'income'});
+  rows.push({label:'Gross Income',amt:fmt(c.gross),type:'sub'});
+  if(s.ct==='permanent'){
+    rows.push({label:'SSO (5% × '+fmt(c.effBase||c.bG)+'฿)',amt:'−'+fmt(c.sso),type:'ded'});
+    if(c.mT>0)rows.push({label:'Income Tax ภงด.1',amt:'−'+fmt(c.mT),type:'ded'});
+  } else {
+    rows.push({label:'WHT '+(C.wht||3)+'%',amt:'−'+fmt(c.whtD),type:'ded'});
+  }
+  if(c.adv>0)rows.push({label:'Advance',amt:'−'+fmt(c.adv),type:'ded'});
+  if(c.dO>0)rows.push({label:'Other Deductions',amt:'−'+fmt(c.dO),type:'ded'});
+
+  const incRows=rows.filter(r=>r.type==='income');
+  const subRows=rows.filter(r=>r.type==='sub');
+  const dedRows=rows.filter(r=>r.type==='ded');
+
+  const renderRow=r=>{
+    const isDed=r.type==='ded';
+    const isSub=r.type==='sub';
+    return`<tr style="border-bottom:1px solid #f3f4f6">
+      <td style="padding:7px 12px;font-size:14px;color:${isDed?'#9ca3af':isSub?'#1e3a5f':'#1a1a2e'};font-weight:${isSub?'700':'400'}">${r.label}</td>
+      <td style="padding:7px 12px;text-align:right;font-size:14px;color:${isDed?'#e24b4a':isSub?'#1e3a5f':'#1a1a2e'};font-weight:${isSub?'700':'500'}">${r.amt} ฿</td>
+    </tr>`;
+  };
+
+  const sectionHdr=label=>`<tr style="background:#f8fafc"><td colspan="2" style="padding:6px 12px;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.8px">${label}</td></tr>`;
+
+  const html=`<div style="font-family:'Sarabun',sans-serif;background:#fff;border-radius:16px;padding:0;width:380px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10)">
+    <div style="background:#1e3a5f;padding:18px 20px 16px">
+      <div style="font-size:11px;color:#93c5fd;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${C.cth}</div>
+      <div style="font-size:18px;font-weight:800;color:#fff">${s.nn} ${s.fn}</div>
+      <div style="font-size:12px;color:#93c5fd;margin-top:2px">${s.pos} · ${period}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;background:#fff">
+      ${sectionHdr('INCOME')}
+      ${incRows.map(renderRow).join('')}
+      ${subRows.map(renderRow).join('')}
+      ${sectionHdr('DEDUCTIONS')}
+      ${dedRows.map(renderRow).join('')}
+    </table>
+    <div style="background:#1e3a5f;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:15px;font-weight:700;color:#fff">NET PAY</span>
+      <span style="font-size:26px;font-weight:900;color:#fde68a">${fmt(c.net)} ฿</span>
+    </div>
+    ${s.ct==='permanent'&&c.aT>0?`<div style="background:#f8fafc;padding:8px 20px;text-align:right;font-size:11px;color:#9ca3af">Est. annual tax: ${fmt(c.aT)} ฿</div>`:''}
+    <div style="background:#f8fafc;padding:8px 20px;text-align:right;font-size:10px;color:#c4c9d4">ReadyCheckGo · กรุณายืนยันก่อนการจ่าย</div>
+  </div>`;
+
+  // Render off-screen
+  const wrap=document.createElement('div');
+  wrap.style.cssText='position:fixed;left:-9999px;top:-9999px;z-index:-1';
+  wrap.innerHTML=html;
+  document.body.appendChild(wrap);
+
+  const node=wrap.firstElementChild;
+  if(btn){btn.innerHTML='<i class="ti ti-loader" style="font-size:14px;animation:spin .8s linear infinite"></i> Rendering…';btn.disabled=true;}
+
+  // Add spin keyframe if not yet
+  if(!document.getElementById('spin-style')){
+    const st=document.createElement('style');
+    st.id='spin-style';
+    st.textContent='@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(st);
+  }
+
+  html2canvas(node,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false}).then(canvas=>{
+    canvas.toBlob(blob=>{
+      document.body.removeChild(wrap);
+      if(!blob){showCopyFail(btn);return;}
+      // Try clipboard API
+      if(navigator.clipboard&&navigator.clipboard.write){
+        navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(()=>{
+          if(btn){btn.innerHTML='<i class="ti ti-check" style="font-size:14px"></i> Copied!';btn.style.background='#dcfce7';btn.style.borderColor='#86efac';btn.disabled=false;}
+          setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-clipboard" style="font-size:14px"></i>Copy Summary';btn.style.background='#f0fdf4';btn.style.borderColor='#bbf7d0';}},2500);
+        }).catch(()=>showCopyFail(btn,canvas));
+      } else {
+        showCopyFail(btn,canvas);
+      }
+    },'image/png');
+  }).catch(()=>{document.body.removeChild(wrap);showCopyFail(btn);});
+}
+
+function showCopyFail(btn,canvas){
+  // Clipboard not available (file:// protocol) — fall back to download
+  if(canvas){
+    const a=document.createElement('a');
+    a.download='pay_summary.png';
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+    if(btn){btn.innerHTML='<i class="ti ti-download" style="font-size:14px"></i> Saved!';btn.disabled=false;}
+  } else {
+    if(btn){btn.innerHTML='<i class="ti ti-alert-triangle" style="font-size:14px"></i> Failed';btn.disabled=false;}
+  }
+  setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-clipboard" style="font-size:14px"></i>Copy Summary';btn.style.background='#f0fdf4';btn.style.borderColor='#bbf7d0';}},2500);
 }
 function togDil(sid,iid,key,cb){if(!P[key])P[key]={};if(!P[key][sid])P[key][sid]={sid,diligence:{}};if(!P[key][sid].diligence)P[key][sid].diligence={};P[key][sid].diligence[iid]=cb.checked;const row=q('dr-'+sid+'-'+iid);if(row)row.className='toggle-row'+(cb.checked?' on':'');const s=S.find(x=>x.id===sid);if(!s)return;const e=P[key][sid];const c=calcM(s,e,key);e.net=c.net;const el=q('snet-'+sid);if(el)el.textContent=fmt(c.net)+' ฿';const ae=q('acct-'+sid);if(ae)ae.innerHTML=buildAcct(s,c);const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');updJump(act,key);updTopbar(act,key);}
 function gatherE(sid){const gval=id=>{const el=q(id+'-'+sid);return el?parseFloat(el.value)||0:0};const s=S.find(x=>x.id===sid);const periodic={};(s?s.items||[]:[]).filter(i=>i.type==='periodic').forEach(i=>{const el=q('pi-'+sid+'-'+i.id);if(el)periodic[i.id]=parseFloat(el.value)||0});const ek=Object.keys(P).find(k=>P[k]&&P[k][sid]);const diligence=(ek&&P[ek][sid])?P[ek][sid].diligence||{}:{};// Read period working days override per dept (stored in P[key].deptOverrides)
