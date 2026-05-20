@@ -446,6 +446,23 @@ input:checked+.slider:before{transform:translateX(18px)}
     <div class="fr"><label>Status</label><select id="s-st"><option>Active</option><option>InActive</option></select></div>
   </div>
   <div id="s-ct-note" style="font-size:12px;border-radius:8px;padding:8px 11px;margin-bottom:10px;border:1px solid"></div>
+  <div id="s-sso-start-row" style="display:none;margin-bottom:10px;background:#fefce8;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px">
+    <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px">ภงด.1 เริ่มต้น (กลางปี) — เว้นว่างถ้าเริ่มต้นปี</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="s-ssoStartM" style="flex:1;font-size:12px;padding:5px 7px;border:1px solid #fcd34d;border-radius:6px;background:#fffbeb">
+        <option value="">-- เดือน --</option>
+        <option value="1">มกราคม</option><option value="2">กุมภาพันธ์</option><option value="3">มีนาคม</option>
+        <option value="4">เมษายน</option><option value="5">พฤษภาคม</option><option value="6">มิถุนายน</option>
+        <option value="7">กรกฎาคม</option><option value="8">สิงหาคม</option><option value="9">กันยายน</option>
+        <option value="10">ตุลาคม</option><option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+      </select>
+      <select id="s-ssoStartY" style="width:90px;font-size:12px;padding:5px 7px;border:1px solid #fcd34d;border-radius:6px;background:#fffbeb">
+        <option value="">-- ปี --</option>
+      </select>
+      <span style="font-size:11px;color:#b45309">ถ้าเว้นว่าง = ใช้ ×12</span>
+    </div>
+    <div style="font-size:10px;color:#b45309;margin-top:5px">ระบบจะบันทึกอัตโนมัติเมื่อเปลี่ยนเป็น Permanent ครั้งแรก</div>
+  </div>
   <div class="dv"></div>
   <div class="st">OT Rate</div>
   <div class="g2" style="margin-bottom:8px">
@@ -643,9 +660,33 @@ function calcM(s,e,key){
   const adv=key?A.filter(a=>a.staffId===s.id&&a.key===key&&a.status==='pending').reduce((t,a)=>t+(parseFloat(a.amt)||0),0):0;
   if(isPerm){
     const ssoBase=Math.min(effBase,parseFloat(C.ssoC)||17500),sso=ssoBase*((parseFloat(C.sso)||5)/100);
-    const aN=Math.max(0,gross*12-Math.min(gross*12*.5,parseFloat(C.d50)||100000)-(parseFloat(C.pers)||60000)-sso*12-(parseFloat(s.ex)||0));
-    const aT=pit(aN),mT=aT/12;
-    return{bG,bLabel,otA,otH,bon,gI,rows,sso,mT,aT,dL,dO,adv,gross,net:gross-sso-mT-dO-adv,isPerm,whtD:0,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,leaveHrs,effBase,dLbase,dLitems};
+    // Determine R (remaining months multiplier)
+    const payM=parseInt(key.split('_')[1]),payY=parseInt(key.split('_')[0]);
+    const startM=s.ssoStartM,startY=s.ssoStartY;
+    // R = 13 − startMonth, fixed for whole start year. Next year onwards = 12.
+    let R=12;
+    if(startM&&startY&&payY===startY&&startM>1){R=13-startM;}
+    // Annual base = salary (excl bonus) × R
+    const salaryBase=gross-bon; // gross without bonus
+    const annBase=salaryBase*R;
+    const d50=Math.min(annBase*0.5,parseFloat(C.d50)||100000);
+    const pers=parseFloat(C.pers)||60000;
+    const ex=parseFloat(s.ex)||0;
+    // Tax A — salary only
+    const taxableA=Math.max(0,annBase-d50-pers-sso*R-ex);
+    const aT=pit(taxableA);
+    const mTbase=aT/R; // normal monthly tax
+    // Tax for bonus month (flat addition, never multiplied)
+    let mT=mTbase;
+    if(bon>0){
+      const annBaseBonus=annBase+bon; // bonus added flat
+      const d50b=Math.min(annBaseBonus*0.5,parseFloat(C.d50)||100000);
+      const taxableB=Math.max(0,annBaseBonus-d50b-pers-sso*R-ex);
+      const aT_B=pit(taxableB);
+      const taxC=aT_B-aT; // bonus-only tax
+      mT=mTbase+taxC;
+    }
+    return{bG,bLabel,otA,otH,bon,gI,rows,sso,mT,aT,R,dL,dO,adv,gross,net:gross-sso-mT-dO-adv,isPerm,whtD:0,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase,dLbase,dLitems};
   }else{
     const whtD=gross*whtR;
     return{bG,bLabel,otA,otH,bon,gI,rows,sso:0,mT:0,aT:0,dL,dO,adv,gross,net:gross-whtD-dO-adv,isPerm,whtD,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase,dLbase,dLitems};
@@ -751,6 +792,15 @@ function syncS(){
   q('pt-doc').style.display=pt==='doctor'?'block':'none';
   const n=q('s-ct-note');
   if(ct==='permanent'){n.style.cssText='background:#eff6ff;color:#1e40af;border-color:#bfdbfe';n.textContent='ภงด.1: SSO from base × 5% + progressive income tax';}
+  // Show ssoStart field only for permanent
+  const sf=q('s-sso-start-row');
+  if(sf)sf.style.display=ct==='permanent'?'block':'none';
+  // Populate year dropdown if empty
+  const ysel=q('s-ssoStartY');
+  if(ysel&&!ysel.querySelector('option[value="2024"]')){
+    const ny=new Date().getFullYear();
+    for(let y=ny-3;y<=ny+2;y++){const o=document.createElement('option');o.value=y;o.textContent=y;ysel.appendChild(o);}
+  }
   else{n.style.cssText='background:#fffbeb;color:#78350f;border-color:#fcd34d';n.textContent='Non-ภงด.1: WHT '+(C.wht||3)+'%. No SSO. No income tax.';}
 }
 ['s-emptype','s-fptmethod','s-pttype','s-ct'].forEach(id=>q(id).addEventListener('change',syncS));
@@ -764,6 +814,8 @@ function openAdd(){
   q('items-body').innerHTML='';q('tier-area').style.display='none';
   q('s-has6m').checked=false;q('s-6m-fields').style.display='none';
   q('s-6m-tier-rows').innerHTML='';q('s-6mlabel').value='';
+  q('s-ssoStartM')&&(q('s-ssoStartM').value='');
+  q('s-ssoStartY')&&(q('s-ssoStartY').value='');
   popDeptDl();popBrDl();syncS();openM('sm');
 }
 function openEdit(id){
@@ -786,6 +838,9 @@ try{
   q('s-6mcycle')&&(q('s-6mcycle').value=(s.incentive6m&&s.incentive6m.cycle)||'1');
   q('s-6mlabel').value=(s.incentive6m&&s.incentive6m.label)||'';
   apply6mTiers(s.incentive6m&&s.incentive6m.tiers);
+  // Load ssoStart
+  q('s-ssoStartM')&&(q('s-ssoStartM').value=s.ssoStartM||'');
+  q('s-ssoStartY')&&(q('s-ssoStartY').value=s.ssoStartY||'');
   popDeptDl();popBrDl();syncS();openM('sm');
 }catch(err){console.error('openEdit error:',err);alert('Edit error: '+err.message);}
 }
@@ -932,7 +987,24 @@ function getItems(){
 }
 function saveStaff(){
   const et=qv('s-emptype'),brTxt=qv('s-br-txt').trim(),mb=B.find(x=>x.name===brTxt);
-  const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:qv('s-ct'),st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0,
+  const newCt=qv('s-ct');
+  const prevStaff=_eSid?S.find(x=>x.id===_eSid):null;
+  const wasNotPerm=prevStaff&&prevStaff.ct!=='permanent';
+  const isNowPerm=newCt==='permanent';
+  // Auto-record ssoStart when switching to permanent for first time
+  let ssoStartM=parseInt(qv('s-ssoStartM'))||null;
+  let ssoStartY=parseInt(qv('s-ssoStartY'))||null;
+  if(isNowPerm&&wasNotPerm&&!ssoStartM){
+    const now=new Date();
+    ssoStartM=now.getMonth()+1;
+    ssoStartY=now.getFullYear();
+    q('s-ssoStartM')&&(q('s-ssoStartM').value=ssoStartM);
+    q('s-ssoStartY')&&(q('s-ssoStartY').value=ssoStartY);
+  }
+  // If January or no start recorded, clear (use ×12)
+  if(ssoStartM===1)ssoStartM=null,ssoStartY=null;
+  const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:newCt,st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0,
+    ssoStartM,ssoStartY,
     incentive6m:q('s-has6m').checked?{enabled:true,label:qv('s-6mlabel').trim()||'6M Incentive',tiers:get6mTiers()}:{enabled:false}};
   if(_eSid){const i=S.findIndex(x=>x.id===_eSid);if(i>=0)S[i]=ns;else S.push(ns);}else S.push(ns);
   svS();closeM('sm');rStaff();rDeptF();
