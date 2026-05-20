@@ -1431,17 +1431,94 @@ function doExport(){
 }
 
 function rAPsel(){q('apf-s').innerHTML='<option value="">All</option>';S.filter(s=>s.st==='Active'&&s.emptype==='parttime').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn+' ('+s.pos+')';q('apf-s').appendChild(o)});}
-function rAPlist(){const sf=qv('apf-s'),stf=qv('apf-st');let f=AP.filter(p=>(!sf||p.staffId===sf)&&(!stf||p.status===stf));f.sort((a,b)=>b.date.localeCompare(a.date));const cont=q('ap-list');cont.innerHTML='';if(!f.length){cont.innerHTML='<div class="card"><div class="no-data">No records</div></div>';return}f.forEach(p=>{const s=S.find(x=>x.id===p.staffId);const det=s&&s.pttype==='doctor'?(p.hours||0)+'hrs × '+fmt(p.hrrate||0)+'฿ + DF '+fmt(p.df_amt||0)+'฿':(p.days||0)+'d × '+fmt(p.dayrate||0)+'฿';const d=document.createElement('div');d.className='adv-card';d.innerHTML='<div class="av" style="width:32px;height:32px;font-size:12px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div><div style="flex:1"><div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+' <span class="badge bdocb" style="margin-left:5px">'+(s?s.pos:'')+'</span></div><div class="ts tm">'+(p.note||'')+' · '+det+' · '+p.date+'</div></div><div style="font-size:17px;font-weight:800;color:var(--doc)">'+fmt(p.net)+' ฿</div><span class="'+(p.status==='paid'?'adone':'atag')+'">'+(p.status==='paid'?'Paid':'Pending')+'</span>';const eb=document.createElement('button');eb.className='btn bo bsm';eb.innerHTML='<i class="ti ti-edit"></i>';eb.addEventListener('click',()=>openAP(p.id));d.appendChild(eb);if(p.status==='pending'){const mb=document.createElement('button');mb.className='btn bok bsm';mb.innerHTML='<i class="ti ti-check"></i>Mark Paid';mb.addEventListener('click',()=>markAP(p.id));d.appendChild(mb);}cont.appendChild(d);});}
+function rAPlist(){const sf=qv('apf-s'),stf=qv('apf-st');let f=AP.filter(p=>(!sf||p.staffId===sf)&&(!stf||p.status===stf));f.sort((a,b)=>b.date.localeCompare(a.date));const cont=q('ap-list');cont.innerHTML='';if(!f.length){cont.innerHTML='<div class="card"><div class="no-data">No records</div></div>';return}f.forEach(p=>{const s=S.find(x=>x.id===p.staffId);const det=s&&s.pttype==='doctor'?(p.hours||0)+'hrs × '+fmt(p.hrrate||0)+'฿ + DF '+fmt(p.df_amt||0)+'฿':(p.days||0)+'d × '+fmt(p.dayrate||0)+'฿';const d=document.createElement('div');d.className='adv-card';d.innerHTML='<div class="av" style="width:32px;height:32px;font-size:12px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div><div style="flex:1"><div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+' <span class="badge bdocb" style="margin-left:5px">'+(s?s.pos:'')+'</span></div><div class="ts tm">'+(p.note||'')+' · '+det+' · '+p.date+'</div></div><div style="font-size:17px;font-weight:800;color:var(--doc)">'+fmt(p.net)+' ฿</div><span class="'+(p.status==='paid'?'adone':'atag')+'">'+(p.status==='paid'?'Paid':'Pending')+'</span>';const eb=document.createElement('button');eb.className='btn bo bsm';eb.innerHTML='<i class="ti ti-edit"></i>';eb.addEventListener('click',()=>openAP(p.id));d.appendChild(eb);if(p.status==='pending'){const mb=document.createElement('button');mb.className='btn bok bsm';mb.innerHTML='<i class="ti ti-check"></i>Mark Paid';mb.addEventListener('click',()=>markAP(p.id));d.appendChild(mb);}
+      const cpyb=document.createElement('button');cpyb.id='apbtn-'+p.id;cpyb.style.cssText='display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer';cpyb.innerHTML='<i class="ti ti-clipboard" style="font-size:13px"></i>Copy';cpyb.addEventListener('click',()=>copyAPSummary(p.id));d.appendChild(cpyb);
+      cont.appendChild(d);});}
 q('apf-s').addEventListener('change',rAPlist);q('apf-st').addEventListener('change',rAPlist);
 q('btn-add-ap').addEventListener('click',()=>openAP(null));q('btn-cancel-ap').addEventListener('click',()=>closeM('apm'));q('btn-save-ap').addEventListener('click',saveAP);
 q('btn-del-ap').addEventListener('click',()=>{if(!_eAPid||!confirm('Delete?'))return;AP=AP.filter(p=>p.id!==_eAPid);svAP();closeM('apm');rAPlist();});
-function onAPstaff(){const sid=qv('ap-s'),s=S.find(x=>x.id===sid);if(!s)return;const isDoc=s.pttype==='doctor';q('ap-form-pt').style.display=isDoc?'none':'block';q('ap-form-doc').style.display=isDoc?'block':'none';apCalc();}
+function onAPstaff(){const sid=qv('ap-s'),s=S.find(x=>x.id===sid);if(!s)return;const isDoc=s.pttype==='doctor';q('ap-form-pt').style.display=isDoc?'none':'block';q('ap-form-doc').style.display=isDoc?'block':'none';
+  // Pre-fill from staff settings only when opening new record (not editing existing)
+  if(!_eAPid){
+    if(isDoc){
+      if(s.hrrate)q('ap-hrrate').value=s.hrrate;
+      if(s.df)q('ap-df').value=s.df;
+    } else {
+      if(s.dayrate)q('ap-dayrate').value=s.dayrate;
+    }
+  }
+  apCalc();}
 q('ap-s').addEventListener('change',onAPstaff);
 ['ap-days','ap-dayrate','ap-hours','ap-hrrate','ap-rev','ap-df','ap-other','ap-deduct'].forEach(id=>{const el=q(id);if(el)el.addEventListener('input',apCalc);});
-function apCalc(){const sid=qv('ap-s'),s=S.find(x=>x.id===sid);const oth=parseFloat(qv('ap-other'))||0,ded=parseFloat(qv('ap-deduct'))||0;let gross=0,df_amt=0;if(s&&s.pttype==='doctor'){const hrs=parseFloat(qv('ap-hours'))||0,rate=parseFloat(qv('ap-hrrate'))||(s.hrrate||0),rev=parseFloat(qv('ap-rev'))||0,df=parseFloat(qv('ap-df'))||(s.df||0);df_amt=rev*(df/100);gross=hrs*rate+df_amt;q('ap-df-amt').textContent=fmt(df_amt);}else{gross=(parseFloat(qv('ap-days'))||0)*(parseFloat(qv('ap-dayrate'))||(s?s.dayrate||0:0));}const net=gross+oth-ded;const el=q('ap-calc');if(gross>0||oth>0){el.style.display='block';el.innerHTML='<div class="fx jb" style="font-size:12px;padding:2px 0"><span>Pay</span><span>'+fmt(gross)+'฿</span></div>'+(oth>0?'<div class="fx jb" style="font-size:12px;padding:2px 0"><span>Other</span><span>+'+fmt(oth)+'฿</span></div>':'')+'<div class="fx jb" style="font-size:12px;padding:2px 0"><span>Deductions</span><span>−'+fmt(ded)+'฿</span></div><div class="fx jb" style="font-weight:700;border-top:1px solid var(--gdbd);margin-top:4px;padding-top:4px"><span>Net</span><span>'+fmt(net)+'฿</span></div>';}else el.style.display='none';}
+function apCalc(){const sid=qv('ap-s'),s=S.find(x=>x.id===sid);const oth=parseFloat(qv('ap-other'))||0,ded=parseFloat(qv('ap-deduct'))||0;let gross=0,df_amt=0;if(s&&s.pttype==='doctor'){const hrs=parseFloat(qv('ap-hours'))||0,rate=parseFloat(qv('ap-hrrate'))||(s.hrrate||0),rev=parseFloat(qv('ap-rev'))||0,df=parseFloat(qv('ap-df'))||(s.df||0);df_amt=rev*(df/100);gross=hrs*rate+df_amt;q('ap-df-amt').textContent=fmt(df_amt);}else{gross=(parseFloat(qv('ap-days'))||0)*(parseFloat(qv('ap-dayrate'))||(s?s.dayrate||0:0));}
+  const whtR=s&&s.ct==='freelance'?(parseFloat(s.wht)||parseFloat(C.wht)||3)/100:0;
+  const whtAmt=gross*whtR;
+  const net=gross+oth-ded-whtAmt;
+  const el=q('ap-calc');if(gross>0||oth>0){el.style.display='block';el.innerHTML='<div class="fx jb" style="font-size:12px;padding:2px 0"><span>Pay</span><span>'+fmt(gross)+'฿</span></div>'+(oth>0?'<div class="fx jb" style="font-size:12px;padding:2px 0"><span>Other</span><span>+'+fmt(oth)+'฿</span></div>':'')+(whtAmt>0?'<div class="fx jb" style="font-size:12px;padding:2px 0;color:#e24b4a"><span>WHT '+(whtR*100)+'%</span><span>−'+fmt(whtAmt)+'฿</span></div>':'')+'<div class="fx jb" style="font-size:12px;padding:2px 0"><span>Deductions</span><span>−'+fmt(ded)+'฿</span></div><div class="fx jb" style="font-weight:700;border-top:1px solid var(--gdbd);margin-top:4px;padding-top:4px"><span>Net</span><span>'+fmt(net)+'฿</span></div>';}else el.style.display='none';}
 function openAP(id){_eAPid=id||null;const el=q('ap-s');el.innerHTML='';S.filter(s=>s.st==='Active'&&s.emptype==='parttime').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn+' ('+s.pos+')';el.appendChild(o)});q('btn-del-ap').style.display=id?'inline-flex':'none';['ap-days','ap-dayrate','ap-hours','ap-hrrate','ap-rev','ap-df','ap-other','ap-deduct'].forEach(x=>{const el=q(x);if(el)el.value='';});q('ap-note').value='';q('ap-status').value='pending';q('ap-date').value=new Date().toISOString().split('T')[0];q('ap-calc').style.display='none';if(id){const p=AP.find(x=>x.id===id);if(!p)return;el.value=p.staffId;q('ap-days').value=p.days||'';q('ap-dayrate').value=p.dayrate||'';q('ap-hours').value=p.hours||'';q('ap-hrrate').value=p.hrrate||'';q('ap-rev').value=p.rev||'';q('ap-df').value=p.df||'';q('ap-other').value=p.other||'';q('ap-deduct').value=p.deduct||'';q('ap-date').value=p.date||'';q('ap-note').value=p.note||'';q('ap-status').value=p.status||'pending';}onAPstaff();openM('apm');}
-function saveAP(){const sid=qv('ap-s'),s=S.find(x=>x.id===sid);const isDoc=s&&s.pttype==='doctor';const hrs=parseFloat(qv('ap-hours'))||0,hrrate=parseFloat(qv('ap-hrrate'))||(s?s.hrrate||0:0),rev=parseFloat(qv('ap-rev'))||0,df=parseFloat(qv('ap-df'))||(s?s.df||0:0),df_amt=isDoc?rev*(df/100):0,days=parseFloat(qv('ap-days'))||0,dayrate=parseFloat(qv('ap-dayrate'))||(s?s.dayrate||0:0),oth=parseFloat(qv('ap-other'))||0,ded=parseFloat(qv('ap-deduct'))||0,gross=isDoc?hrs*hrrate+df_amt:days*dayrate,net=gross+oth-ded;const np={id:_eAPid||Date.now().toString(),staffId:sid,isDoc,days,dayrate,hours:hrs,hrrate,rev,df,df_amt,other:oth,deduct:ded,net,date:qv('ap-date'),note:qv('ap-note').trim(),status:qv('ap-status')};if(_eAPid){const i=AP.findIndex(x=>x.id===_eAPid);if(i>=0)AP[i]=np;else AP.push(np)}else AP.push(np);svAP();closeM('apm');rAPlist();}
+function saveAP(){const sid=qv('ap-s'),s=S.find(x=>x.id===sid);const isDoc=s&&s.pttype==='doctor';const hrs=parseFloat(qv('ap-hours'))||0,hrrate=parseFloat(qv('ap-hrrate'))||(s?s.hrrate||0:0),rev=parseFloat(qv('ap-rev'))||0,df=parseFloat(qv('ap-df'))||(s?s.df||0:0),df_amt=isDoc?rev*(df/100):0,days=parseFloat(qv('ap-days'))||0,dayrate=parseFloat(qv('ap-dayrate'))||(s?s.dayrate||0:0),oth=parseFloat(qv('ap-other'))||0,ded=parseFloat(qv('ap-deduct'))||0,gross=isDoc?hrs*hrrate+df_amt:days*dayrate;
+  const whtPct=s&&s.ct==='freelance'?parseFloat(s.wht)||parseFloat(C.wht)||3:0;
+  const whtAmt=gross*(whtPct/100);
+  const net=gross+oth-ded-whtAmt;
+  const np={id:_eAPid||Date.now().toString(),staffId:sid,isDoc,days,dayrate,hours:hrs,hrrate,rev,df,df_amt,other:oth,deduct:ded,whtPct,whtAmt,net,date:qv('ap-date'),note:qv('ap-note').trim(),status:qv('ap-status')};if(_eAPid){const i=AP.findIndex(x=>x.id===_eAPid);if(i>=0)AP[i]=np;else AP.push(np)}else AP.push(np);svAP();closeM('apm');rAPlist();}
 function markAP(id){const p=AP.find(x=>x.id===id);if(p){p.status='paid';svAP();rAPlist();}}
+
+function copyAPSummary(id){
+  const p=AP.find(x=>x.id===id);if(!p)return;
+  const s=S.find(x=>x.id===p.staffId);if(!s)return;
+  const btn=document.getElementById('apbtn-'+id);
+  const gross=p.isDoc?(p.hours||0)*(p.hrrate||0)+(p.df_amt||0):(p.days||0)*(p.dayrate||0);
+  const whtAmt=p.whtAmt||0;
+  const whtPct=p.whtPct||0;
+  const det=p.isDoc?`${p.hours||0} hrs × ฿${fmt(p.hrrate||0)} + DF ${fmt(p.df_amt||0)} ฿`:`${p.days||0} days × ฿${fmt(p.dayrate||0)}`;
+  const rows=[];
+  rows.push(`<tr><td style="padding:7px 12px;font-size:14px;color:#1a1a2e">${p.isDoc?'Hours × Rate':'Days × Rate'}</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#1a1a2e;font-weight:500">${det}</td></tr>`);
+  if(p.isDoc&&(p.df_amt||0)>0)rows.push(`<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:7px 12px;font-size:14px;color:#1a1a2e">DF (${p.df||0}% × ฿${fmt(p.rev||0)})</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#1a1a2e;font-weight:500">${fmt(p.df_amt||0)} ฿</td></tr>`);
+  if(p.other)rows.push(`<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:7px 12px;font-size:14px;color:#1a1a2e">Other</td><td style="padding:7px 12px;text-align:right;font-size:14px">+${fmt(p.other)} ฿</td></tr>`);
+  rows.push(`<tr style="border-bottom:1px solid #1e3a5f"><td style="padding:7px 12px;font-size:14px;color:#1e3a5f;font-weight:700">Gross Pay</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#1e3a5f;font-weight:700">${fmt(gross)} ฿</td></tr>`);
+  if(whtAmt>0)rows.push(`<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:7px 12px;font-size:14px;color:#9ca3af">WHT ${whtPct}%</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#e24b4a">−${fmt(whtAmt)} ฿</td></tr>`);
+  if(p.deduct)rows.push(`<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:7px 12px;font-size:14px;color:#9ca3af">Deductions</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#e24b4a">−${fmt(p.deduct)} ฿</td></tr>`);
+
+  const html=`<div style="font-family:'Sarabun',sans-serif;background:#fff;border-radius:16px;padding:0;width:380px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10)">
+    <div style="background:#1e3a5f;padding:18px 20px 16px">
+      <div style="font-size:11px;color:#93c5fd;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${C.cth}</div>
+      <div style="font-size:18px;font-weight:800;color:#fff">${s.nn} ${s.fn}</div>
+      <div style="font-size:12px;color:#93c5fd;margin-top:2px">${s.pos} · ${p.date}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;background:#fff">
+      <tr style="background:#f8fafc"><td colspan="2" style="padding:6px 12px;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.8px">ANYTIME PAYMENT</td></tr>
+      ${rows.join('')}
+    </table>
+    <div style="background:#1e3a5f;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:15px;font-weight:700;color:#fff">NET PAY</span>
+      <span style="font-size:26px;font-weight:900;color:#fde68a">${fmt(p.net)} ฿</span>
+    </div>
+    <div style="background:#f8fafc;padding:8px 20px;text-align:right;font-size:10px;color:#c4c9d4">ReadyCheckGo · กรุณายืนยันก่อนการจ่าย</div>
+  </div>`;
+
+  const wrap=document.createElement('div');
+  wrap.style.cssText='position:fixed;left:-9999px;top:-9999px;z-index:-1';
+  wrap.innerHTML=html;document.body.appendChild(wrap);
+  const node=wrap.firstElementChild;
+  if(btn){btn.innerHTML='<i class="ti ti-loader" style="font-size:13px;animation:spin .8s linear infinite"></i> Rendering…';btn.disabled=true;}
+  html2canvas(node,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false}).then(canvas=>{
+    canvas.toBlob(blob=>{
+      document.body.removeChild(wrap);
+      if(!blob){if(btn){btn.innerHTML='<i class="ti ti-clipboard"></i>Copy';btn.disabled=false;}return;}
+      if(navigator.clipboard&&navigator.clipboard.write){
+        navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(()=>{
+          if(btn){btn.innerHTML='<i class="ti ti-check"></i> Copied!';btn.style.background='#dcfce7';}
+          setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-clipboard" style="font-size:13px"></i>Copy';btn.style.background='#f0fdf4';btn.disabled=false;}},2500);
+        }).catch(()=>apCopyFallback(btn,canvas));
+      } else apCopyFallback(btn,canvas);
+    },'image/png');
+  }).catch(()=>{document.body.removeChild(wrap);if(btn){btn.innerHTML='<i class="ti ti-clipboard"></i>Copy';btn.disabled=false;}});
+}
+function apCopyFallback(btn,canvas){
+  const a=document.createElement('a');a.download='payment_summary.png';a.href=canvas.toDataURL('image/png');a.click();
+  if(btn){btn.innerHTML='<i class="ti ti-download"></i> Saved!';btn.disabled=false;}
+  setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-clipboard" style="font-size:13px"></i>Copy';btn.style.background='#f0fdf4';}},2500);
+}
 
 function rAdvSels(){q('af-s').innerHTML='<option value="">All Staff</option>';S.filter(s=>s.st==='Active').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn;q('af-s').appendChild(o)});const keys=[...new Set(A.map(a=>a.key))].filter(Boolean).sort().reverse();q('af-m').innerHTML='<option value="">All Periods</option>';keys.forEach(k=>{const[ky,km]=k.split('_');const o=document.createElement('option');o.value=k;o.textContent=MTH[parseInt(km)-1]+' '+ky;q('af-m').appendChild(o)});}
 function rAdv(){const sf=qv('af-s'),mf=qv('af-m'),stf=qv('af-st');let f=A.filter(a=>(!sf||a.staffId===sf)&&(!mf||a.key===mf)&&(!stf||a.status===stf));f.sort((a,b)=>b.date.localeCompare(a.date));const cont=q('adv-list');cont.innerHTML='';if(!f.length){cont.innerHTML='<div class="card"><div class="no-data">No records</div></div>';return}f.forEach(a=>{const s=S.find(x=>x.id===a.staffId);const[ky,km]=a.key.split('_');const d=document.createElement('div');d.className='adv-card';d.innerHTML='<div class="av" style="width:30px;height:30px;font-size:11px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div><div style="flex:1"><div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+'</div><div class="ts tm">'+(a.note||'-')+' · '+MTH[parseInt(km)-1]+' '+ky+'</div></div><div style="font-size:17px;font-weight:800;color:#92400e">'+fmt(a.amt)+' ฿</div><span class="'+(a.status==='pending'?'atag':'adone')+'">'+(a.status==='pending'?'Pending':'Deducted')+'</span>';const eb=document.createElement('button');eb.className='btn bo bsm';eb.innerHTML='<i class="ti ti-edit"></i>';eb.addEventListener('click',()=>openEditAdv(a.id));d.appendChild(eb);if(a.status==='pending'){const mb=document.createElement('button');mb.className='btn bok bsm';mb.innerHTML='<i class="ti ti-check"></i>Done';mb.addEventListener('click',()=>markAdv(a.id));d.appendChild(mb);}cont.appendChild(d);});}
