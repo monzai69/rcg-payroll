@@ -1472,8 +1472,9 @@ function copyAPSummary(id){
   const whtPct=p.whtPct||0;
   const det=p.isDoc?`${p.hours||0} hrs × ฿${fmt(p.hrrate||0)} + DF ${fmt(p.df_amt||0)} ฿`:`${p.days||0} days × ฿${fmt(p.dayrate||0)}`;
   const rows=[];
-  rows.push(`<tr><td style="padding:7px 12px;font-size:14px;color:#1a1a2e">${p.isDoc?'Hours × Rate':'Days × Rate'}</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#1a1a2e;font-weight:500">${det}</td></tr>`);
-  if(p.isDoc&&(p.df_amt||0)>0)rows.push(`<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:7px 12px;font-size:14px;color:#1a1a2e">DF (${p.df||0}% × ฿${fmt(p.rev||0)})</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#1a1a2e;font-weight:500">${fmt(p.df_amt||0)} ฿</td></tr>`);
+  const hrsAmt=(p.hours||0)*(p.hrrate||0);
+  rows.push(`<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:7px 12px;font-size:14px;color:#1a1a2e">${p.isDoc?'Hours × Rate':'Days × Rate'}</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#1a1a2e;font-weight:500">${p.isDoc?fmt(hrsAmt):det} ฿</td></tr>`);
+  if(p.isDoc&&(p.df_amt||0)>0)rows.push(`<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:7px 12px;font-size:14px;color:#1a1a2e">DF (${p.df||0}%)</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#1a1a2e;font-weight:500">${fmt(p.df_amt||0)} ฿</td></tr>`);
   if(p.other)rows.push(`<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:7px 12px;font-size:14px;color:#1a1a2e">Other</td><td style="padding:7px 12px;text-align:right;font-size:14px">+${fmt(p.other)} ฿</td></tr>`);
   rows.push(`<tr style="border-bottom:1px solid #1e3a5f"><td style="padding:7px 12px;font-size:14px;color:#1e3a5f;font-weight:700">Gross Pay</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#1e3a5f;font-weight:700">${fmt(gross)} ฿</td></tr>`);
   if(whtAmt>0)rows.push(`<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:7px 12px;font-size:14px;color:#9ca3af">WHT ${whtPct}%</td><td style="padding:7px 12px;text-align:right;font-size:14px;color:#e24b4a">−${fmt(whtAmt)} ฿</td></tr>`);
