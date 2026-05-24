@@ -130,6 +130,78 @@ input:checked+.slider:before{transform:translateX(18px)}
 .cbv{font-size:11px;font-weight:600;color:#fff;white-space:nowrap}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- Firebase -->
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js';
+import{getFirestore,doc,setDoc,getDoc,collection,getDocs}from'https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js';
+const firebaseConfig={apiKey:"AIzaSyBNNplXMVR6KE3Zm8cDjTEPYPJdnxxc8vA",authDomain:"rcg-payroll.firebaseapp.com",projectId:"rcg-payroll",storageBucket:"rcg-payroll.firebasestorage.app",messagingSenderId:"39778222918",appId:"1:39778222918:web:6edbafae2ddaaa2508db47"};
+const app=initializeApp(firebaseConfig);
+const db=getFirestore(app);
+window._db=db;
+window._fbReady=true;
+
+// ── FIREBASE HELPERS ──
+window.fbSet=async(col,id,data)=>{try{await setDoc(doc(db,col,id),data);return true;}catch(e){console.warn('fbSet fail',e);return false;}};
+window.fbGet=async(col,id)=>{try{const d=await getDoc(doc(db,col,id));return d.exists()?d.data():null;}catch(e){console.warn('fbGet fail',e);return null;}};
+window.fbGetAll=async(col)=>{try{const s=await getDocs(collection(db,col));return s.docs.map(d=>d.data());}catch(e){console.warn('fbGetAll fail',e);return null;}};
+
+// ── CLOUD SYNC ──
+window.cloudSave=async(key,data)=>{
+  const map={[SK]:'staff',[PK]:'payroll',[CK]:'company',[AK]:'advance',[APK]:'anytime',[BK]:'branches',[LK]:'logos',[SSK]:'sigstamp'};
+  const col=map[key];if(!col||!window._fbReady)return;
+  // logos and sigstamp have base64 images — store separately to avoid 1MB limit
+  if(col==='logos'||col==='sigstamp'){
+    await window.fbSet('config',col,typeof data==='string'?JSON.parse(data):{...JSON.parse(data)});
+  } else if(col==='staff'||col==='anytime'||col==='advance'||col==='branches'){
+    const arr=typeof data==='string'?JSON.parse(data):data;
+    await window.fbSet('config',col,{data:JSON.stringify(arr),updatedAt:Date.now()});
+  } else if(col==='payroll'){
+    const obj=typeof data==='string'?JSON.parse(data):data;
+    await window.fbSet('config','payroll',{data:JSON.stringify(obj),updatedAt:Date.now()});
+  } else {
+    const obj=typeof data==='string'?JSON.parse(data):data;
+    await window.fbSet('config',col,obj);
+  }
+};
+
+// ── CLOUD LOAD (called on startup) ──
+window.cloudLoad=async()=>{
+  if(!window._fbReady)return false;
+  try{
+    const showStatus=(msg,ok)=>{
+      const el=document.getElementById('sync-status');
+      if(el){el.textContent=msg;el.style.color=ok?'#16a34a':'#e24b4a';el.style.display='block';setTimeout(()=>{el.style.display='none';},3000);}
+    };
+    showStatus('☁️ Syncing from cloud...', true);
+    const keys=['staff','payroll','company','advance','anytime','branches','logos','sigstamp'];
+    const results=await Promise.all(keys.map(k=>window.fbGet('config',k)));
+    const [staff,payroll,company,advance,anytime,branches,logos,sigstamp]=results;
+    let loaded=false;
+    if(staff&&staff.data){try{S=JSON.parse(staff.data);localStorage.setItem(SK,staff.data);loaded=true;}catch{}}
+    if(payroll&&payroll.data){try{P=JSON.parse(payroll.data);localStorage.setItem(PK,payroll.data);loaded=true;}catch{}}
+    if(company&&company.cth){C=company;localStorage.setItem(CK,JSON.stringify(company));loaded=true;}
+    if(advance&&advance.data){try{A=JSON.parse(advance.data);localStorage.setItem(AK,advance.data);}catch{}}
+    if(anytime&&anytime.data){try{AP=JSON.parse(anytime.data);localStorage.setItem(APK,anytime.data);}catch{}}
+    if(branches&&branches.data){try{B=JSON.parse(branches.data);localStorage.setItem(BK,branches.data);}catch{}}
+    if(logos){LOGOS=Object.assign({rcg:null,clinic:null,mode:'rcg'},logos);localStorage.setItem(LK,JSON.stringify(LOGOS));}
+    if(sigstamp){SIGSTAMP=Object.assign({sig:null,stamp:null,showStamp:true},sigstamp);localStorage.setItem(SSK,JSON.stringify(SIGSTAMP));}
+    if(loaded){
+      showStatus('✅ Synced from cloud', true);
+      // Refresh UI with cloud data
+      rDash();rStaff&&rStaff();
+    } else {
+      showStatus('📱 Using local data', true);
+    }
+    return loaded;
+  }catch(e){
+    console.warn('cloudLoad error',e);
+    return false;
+  }
+};
+
+// Load from cloud after page is ready
+window.addEventListener('load',()=>setTimeout(()=>window.cloudLoad(),500));
+</script>
 </head>
 <body>
 <div class="app">
@@ -190,6 +262,7 @@ input:checked+.slider:before{transform:translateX(18px)}
       <div style="flex:1"></div>
       <button class="btn bok bsm" id="btn-saveall"><i class="ti ti-device-floppy"></i>Save All</button>
       <button class="btn bgd bsm" id="btn-export"><i class="ti ti-table-export"></i>Export CSV</button>
+      <span id="sync-status" style="display:none;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:#f0fdf4"></span>
     </div>
   </div>
   <div id="pay-topbar" style="margin-bottom:14px"></div>
@@ -594,7 +667,7 @@ function ld(){
   S=S.map(s=>({st:'Active',emptype:'fulltime',wht:3,items:[],...s}));
   svS();
 }
-const sv=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+const sv=(k,v)=>{const s=JSON.stringify(v);localStorage.setItem(k,s);if(window.cloudSave)window.cloudSave(k,s);};
 const svS=()=>sv(SK,S),svP=()=>sv(PK,P),svC=()=>sv(CK,C),svA=()=>sv(AK,A),svAP=()=>sv(APK,AP),svB=()=>sv(BK,B),svL=()=>sv(LK,LOGOS),svSS=()=>sv(SSK,SIGSTAMP);
 
 function seedB(){B=[{id:'br1',name:'RCG Silom',addr:'496/14 ถนนสาธุประดิษฐ์',lic:'',tel:'',certname:''},{id:'br2',name:'LIV Clinic Samui',addr:'เกาะสมุย จังหวัดสุราษฎร์ธานี',lic:'10101028777',tel:'',certname:'ลีฟ คลินิกเวชกรรม สาขาเกาะสมุย'},{id:'br3',name:'Carebox',addr:'',lic:'',tel:'',certname:''}];svB()}
