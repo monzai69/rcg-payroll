@@ -139,6 +139,7 @@ const app=initializeApp(firebaseConfig);
 const db=getFirestore(app);
 window._db=db;
 window._fbReady=true;
+window.dispatchEvent(new Event('fbready'));
 
 // ── FIREBASE HELPERS ──
 window.fbSet=async(col,id,data)=>{try{await setDoc(doc(db,col,id),data);return true;}catch(e){console.warn('fbSet fail',e);return false;}};
@@ -667,7 +668,7 @@ function ld(){
   S=S.map(s=>({st:'Active',emptype:'fulltime',wht:3,items:[],...s}));
   svS();
 }
-const sv=(k,v)=>{const s=JSON.stringify(v);localStorage.setItem(k,s);if(window.cloudSave)window.cloudSave(k,s);};
+const sv=(k,v)=>{const s=JSON.stringify(v);localStorage.setItem(k,s);if(window.cloudSave)window.cloudSave(k,s);else window.addEventListener('fbready',()=>window.cloudSave(k,s),{once:true});};
 const svS=()=>sv(SK,S),svP=()=>sv(PK,P),svC=()=>sv(CK,C),svA=()=>sv(AK,A),svAP=()=>sv(APK,AP),svB=()=>sv(BK,B),svL=()=>sv(LK,LOGOS),svSS=()=>sv(SSK,SIGSTAMP);
 
 function seedB(){B=[{id:'br1',name:'RCG Silom',addr:'496/14 ถนนสาธุประดิษฐ์',lic:'',tel:'',certname:''},{id:'br2',name:'LIV Clinic Samui',addr:'เกาะสมุย จังหวัดสุราษฎร์ธานี',lic:'10101028777',tel:'',certname:'ลีฟ คลินิกเวชกรรม สาขาเกาะสมุย'},{id:'br3',name:'Carebox',addr:'',lic:'',tel:'',certname:''}];svB()}
@@ -1720,10 +1721,27 @@ function importAllData(){
         if(data.branches){B=data.branches;svB();}
         if(data.logos)   {LOGOS=data.logos;svL();}
         if(data.sigstamp){SIGSTAMP=data.sigstamp;svSS();}
-        // Refresh UI
-        rDash();rStaff();ldCfg();rDeptChips();rInameChips();rBrCards();rLogoSettings();
+        // Explicitly push everything to Firebase
         const msg=document.getElementById('backup-msg');
-        if(msg){msg.style.display='block';msg.style.background='#dcfce7';msg.style.color='#16a34a';msg.textContent='✅ Data restored successfully! '+data.staff.length+' staff, exported '+data.exportedAt.slice(0,10)+'.';}
+        if(msg){msg.style.display='block';msg.style.background='#fef3c7';msg.style.color='#92400e';msg.textContent='☁️ Syncing to cloud... please wait';}
+        const pushAll=async()=>{
+          if(!window.cloudSave){
+            if(msg){msg.style.background='#fee2e2';msg.style.color='#991b1b';msg.textContent='❌ Firebase not ready. Data saved locally only. Refresh and import again.';}
+            return;
+          }
+          await Promise.all([
+            window.cloudSave(SK,JSON.stringify(S)),
+            window.cloudSave(PK,JSON.stringify(P)),
+            window.cloudSave(CK,JSON.stringify(C)),
+            window.cloudSave(AK,JSON.stringify(A)),
+            window.cloudSave(APK,JSON.stringify(AP)),
+            window.cloudSave(BK,JSON.stringify(B)),
+            window.cloudSave(LK,JSON.stringify(LOGOS)),
+            window.cloudSave(SSK,JSON.stringify(SIGSTAMP)),
+          ]);
+          if(msg){msg.style.background='#dcfce7';msg.style.color='#16a34a';msg.textContent='✅ Data restored and synced to cloud! '+data.staff.length+' staff. Now open on any device!';}
+        };
+        setTimeout(pushAll,800);
       }catch(err){
         const msg=document.getElementById('backup-msg');
         if(msg){msg.style.display='block';msg.style.background='#fee2e2';msg.style.color='#991b1b';msg.textContent='❌ Import failed: '+err.message+'. Please check the file.';}
