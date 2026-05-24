@@ -267,6 +267,22 @@ input:checked+.slider:before{transform:translateX(18px)}
 
 <div class="pg" id="pg-cfg">
   <div class="ph"><h1>Settings</h1></div>
+
+  <!-- DATA BACKUP -->
+  <div class="card" style="margin-bottom:14px;border:1.5px solid #fcd34d;background:linear-gradient(135deg,#fffbeb,#fefce8)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div>
+        <div style="font-size:13px;font-weight:800;color:#92400e">💾 Data Backup</div>
+        <div style="font-size:11px;color:#b45309;margin-top:2px">Export all your data as a JSON file. Keep it safe — use it to restore or migrate to a new device.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button onclick="exportAllData()" style="display:inline-flex;align-items:center;gap:7px;background:#f59e0b;color:#fff;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer"><i class="ti ti-download" style="font-size:15px"></i>Export All Data (JSON)</button>
+      <button onclick="importAllData()" style="display:inline-flex;align-items:center;gap:7px;background:#fff;color:#92400e;border:1.5px solid #fcd34d;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer"><i class="ti ti-upload" style="font-size:15px"></i>Import / Restore Data</button>
+      <input type="file" id="import-json-input" accept=".json" style="display:none">
+    </div>
+    <div id="backup-msg" style="display:none;margin-top:10px;font-size:12px;font-weight:600;padding:8px 12px;border-radius:7px"></div>
+  </div>
   <div class="g2" style="gap:14px;margin-bottom:14px">
     <div class="card"><div class="st">Company Info</div>
       <div class="fr"><label>Company Name</label><input id="c-cth" type="text"></div>
@@ -1587,6 +1603,64 @@ function saveCfg(){C.cth=q('c-cth').value;C.addr=q('c-addr').value;C.sgn=q('c-sg
 ['btn-scfg','btn-scfg2'].forEach(id=>q(id).addEventListener('click',saveCfg));
 
 /* ══════════════════ LOGO MANAGEMENT ══════════════════ */
+function exportAllData(){
+  const data={
+    version:'rcg_v15',
+    exportedAt:new Date().toISOString(),
+    staff:S,
+    payroll:P,
+    company:C,
+    anytime:AP,
+    advance:A,
+    branches:B,
+    logos:LOGOS,
+    sigstamp:SIGSTAMP
+  };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='RCG_Payroll_Backup_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  const msg=document.getElementById('backup-msg');
+  if(msg){msg.style.display='block';msg.style.background='#dcfce7';msg.style.color='#16a34a';msg.textContent='✅ Backup downloaded! Keep this file somewhere safe.';}
+}
+
+function importAllData(){
+  const inp=document.getElementById('import-json-input');
+  if(!inp)return;
+  inp.value='';
+  inp.onchange=function(){
+    const f=this.files[0];if(!f)return;
+    const rd=new FileReader();
+    rd.onload=function(e){
+      try{
+        const data=JSON.parse(e.target.result);
+        if(!data.version||!data.staff){throw new Error('Invalid backup file');}
+        if(!confirm('⚠️ This will REPLACE all current data with the backup.\n\nExported: '+data.exportedAt+'\nStaff: '+data.staff.length+' records\n\nContinue?'))return;
+        // Restore all data
+        if(data.staff)   {S=data.staff;   svS();}
+        if(data.payroll) {P=data.payroll; svP();}
+        if(data.company) {C=data.company; svC();}
+        if(data.anytime) {AP=data.anytime;svAP();}
+        if(data.advance) {A=data.advance; svA();}
+        if(data.branches){B=data.branches;svB();}
+        if(data.logos)   {LOGOS=data.logos;svL();}
+        if(data.sigstamp){SIGSTAMP=data.sigstamp;svSS();}
+        // Refresh UI
+        rDash();rStaff();ldCfg();rDeptChips();rInameChips();rBrCards();rLogoSettings();
+        const msg=document.getElementById('backup-msg');
+        if(msg){msg.style.display='block';msg.style.background='#dcfce7';msg.style.color='#16a34a';msg.textContent='✅ Data restored successfully! '+data.staff.length+' staff, exported '+data.exportedAt.slice(0,10)+'.';}
+      }catch(err){
+        const msg=document.getElementById('backup-msg');
+        if(msg){msg.style.display='block';msg.style.background='#fee2e2';msg.style.color='#991b1b';msg.textContent='❌ Import failed: '+err.message+'. Please check the file.';}
+      }
+    };
+    rd.readAsText(f);
+  };
+  inp.click();
+}
+
 function rLogoSettings(){
   ['rcg','clinic'].forEach(k=>{
     const img=LOGOS[k];
