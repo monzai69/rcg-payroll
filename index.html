@@ -1044,7 +1044,7 @@ function rStaff(){
     const ri=s.emptype==='fulltime'?(s.base?fmt(s.base)+' ฿/mo':'—'):s.emptype==='fullparttime'?(s.fptmethod==='daily'?fmt(s.fptdayrate)+' ฿/day':fmt(s.hrrate)+' ฿/hr'):s.pttype==='doctor'?fmt(s.hrrate)+' ฿/hr+DF':fmt(s.dayrate)+' ฿/day';
     const tx=s.ct==='permanent'?'<span class="badge bperm">ภงด.1</span>':'<span class="badge bcont">WHT</span>';
     const tr=document.createElement('tr');
-    tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td><span class="badge '+(s.st==='Active'?'ba':'bi')+'">'+s.st+'</span></td><td></td>';
+    tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td><span class="badge '+(s.st==='Active'?'ba':'bi')+'">'+s.st+'</span></td><td style="white-space:nowrap"></td>';
     const btn=document.createElement('button');
     btn.className='btn bo bsm';btn.innerHTML='<i class="ti ti-edit"></i>';
     btn.addEventListener('click',function(){openEdit(s.id);});
