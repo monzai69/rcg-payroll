@@ -537,6 +537,23 @@ window.cloudLoad=async()=>{
 
 </div></div>
 
+<!-- HISTORY MODAL -->
+<div class="modal-overlay" id="hm">
+<div class="modal-box" style="max-width:600px;max-height:85vh;overflow-y:auto">
+  <div class="fx jb ic" style="margin-bottom:14px">
+    <div style="font-size:16px;font-weight:700;color:var(--nv)" id="hm-title">Staff History</div>
+    <button class="btn bo bsm" onclick="closeM('hm')"><i class="ti ti-x"></i></button>
+  </div>
+  <!-- Tabs -->
+  <div style="display:flex;gap:0;border-bottom:2px solid #f0f0f0;margin-bottom:16px">
+    <button id="htab-changes" onclick="switchHTab('changes')" style="padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid var(--nv);color:var(--nv);margin-bottom:-2px">📋 Change History</button>
+    <button id="htab-payments" onclick="switchHTab('payments')" style="padding:8px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:#9ca3af;margin-bottom:-2px">💰 Payment Summary</button>
+  </div>
+  <div id="hm-changes"></div>
+  <div id="hm-payments" style="display:none"></div>
+</div>
+</div>
+
 <!-- STAFF MODAL -->
 <div class="modal-overlay" id="sm">
 <div class="modal-box">
@@ -915,9 +932,13 @@ function rStaff(){
     tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td><span class="badge '+(s.st==='Active'?'ba':'bi')+'">'+s.st+'</span></td><td></td>';
     const btn=document.createElement('button');
     btn.className='btn bo bsm';btn.innerHTML='<i class="ti ti-edit"></i>';
-    // THE KEY FIX: addEventListener with closure — no string interpolation
     btn.addEventListener('click',function(){openEdit(s.id);});
     tr.querySelector('td:last-child').appendChild(btn);
+    // History button
+    const hbtn=document.createElement('button');
+    hbtn.className='btn bo bsm';hbtn.style.marginLeft='4px';hbtn.innerHTML='<i class="ti ti-history"></i>';
+    hbtn.addEventListener('click',function(){openHistory(s.id);});
+    tr.querySelector('td:last-child').appendChild(hbtn);
     tb.appendChild(tr);
   });
 }
@@ -1148,8 +1169,144 @@ function saveStaff(){
   const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:newCt,st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0,
     ssoStartM,ssoStartY,
     incentive6m:q('s-has6m').checked?{enabled:true,label:qv('s-6mlabel').trim()||'6M Incentive',tiers:get6mTiers()}:{enabled:false}};
-  if(_eSid){const i=S.findIndex(x=>x.id===_eSid);if(i>=0)S[i]=ns;else S.push(ns);}else S.push(ns);
+  if(_eSid){
+    const i=S.findIndex(x=>x.id===_eSid);
+    if(i>=0){
+      const changes=diffStaff(S[i],ns);
+      if(changes.length){
+        const user=document.getElementById('user-email')?document.getElementById('user-email').textContent:'admin';
+        saveHistory(ns.id,changes,user);
+      }
+      S[i]=ns;
+    }else S.push(ns);
+  }else S.push(ns);
   svS();closeM('sm');rStaff();rDeptF();
+}
+
+/* ══════════════════ HISTORY ══════════════════ */
+function diffStaff(oldS,newS){
+  const changes=[];
+  const fmtVal=(k,v)=>{
+    if(v===null||v===undefined)return'—';
+    if(k==='base'||k==='dayrate'||k==='hrrate'||k==='fptdayrate')return fmt(v)+' ฿';
+    if(k==='wht'||k==='df')return v+'%';
+    return String(v);
+  };
+  const trackKeys=['base','ct','wht','otrate','hrrate','dayrate','fptdayrate','df','pos','dept','st','emptype'];
+  trackKeys.forEach(k=>{
+    const ov=oldS[k],nv=newS[k];
+    if(String(ov||'')!==String(nv||'')){
+      const labels={base:'Base Salary',ct:'Contract Type',wht:'WHT Rate',otrate:'OT Rate',hrrate:'Hourly Rate',dayrate:'Day Rate',fptdayrate:'FPT Day Rate',df:'DF Rate',pos:'Position',dept:'Department',st:'Status',emptype:'Employment Type'};
+      changes.push({field:labels[k]||k,from:fmtVal(k,ov),to:fmtVal(k,nv)});
+    }
+  });
+  // Track items (commission, incentive items)
+  const oi=JSON.stringify((oldS.items||[]).map(x=>({name:x.name,type:x.type,val:x.val,tiers:x.tiers})));
+  const ni=JSON.stringify((newS.items||[]).map(x=>({name:x.name,type:x.type,val:x.val,tiers:x.tiers})));
+  if(oi!==ni){
+    // Find specific item changes
+    const oldItems=oldS.items||[],newItems=newS.items||[];
+    newItems.forEach(ni=>{
+      const oi2=oldItems.find(x=>x.name===ni.name);
+      if(!oi2){changes.push({field:'Item Added',from:'—',to:ni.name+' ('+ni.type+')'});}
+      else{
+        if(String(oi2.val||'')!==String(ni.val||''))changes.push({field:ni.name+' value',from:fmtVal('val',oi2.val),to:fmtVal('val',ni.val)});
+        if(JSON.stringify(oi2.tiers||[])!==JSON.stringify(ni.tiers||[]))changes.push({field:ni.name+' tiers',from:JSON.stringify(oi2.tiers||[]),to:JSON.stringify(ni.tiers||[])});
+      }
+    });
+    oldItems.forEach(oi2=>{if(!newItems.find(x=>x.name===oi2.name))changes.push({field:'Item Removed',from:oi2.name,to:'—'});});
+  }
+  // Track 6m incentive tiers
+  const o6=JSON.stringify((oldS.incentive6m&&oldS.incentive6m.tiers)||[]);
+  const n6=JSON.stringify((newS.incentive6m&&newS.incentive6m.tiers)||[]);
+  if(o6!==n6)changes.push({field:'6M Incentive Tiers',from:o6,to:n6});
+  return changes;
+}
+
+async function saveHistory(staffId,changes,user){
+  if(!changes.length||!window.fbSet)return;
+  const entry={id:Date.now().toString(),date:new Date().toISOString(),by:user||'admin',changes};
+  try{
+    // Store as array in Firebase under history/staffId
+    const existing=await window.fbGet('history',staffId);
+    const arr=existing&&existing.entries?existing.entries:[];
+    arr.unshift(entry); // newest first
+    await window.fbSet('history',staffId,{entries:arr});
+  }catch(e){console.warn('saveHistory failed',e);}
+}
+
+let _hStaffId=null,_hTab='changes';
+async function openHistory(sid){
+  const s=S.find(x=>x.id===sid);if(!s)return;
+  _hStaffId=sid;_hTab='changes';
+  q('hm-title').textContent=(s.nn||'')+' '+s.fn+' — History';
+  switchHTab('changes');
+  openM('hm');
+  await loadHistoryTab(sid);
+}
+
+function switchHTab(tab){
+  _hTab=tab;
+  q('htab-changes').style.borderBottomColor=tab==='changes'?'var(--nv)':'transparent';
+  q('htab-changes').style.color=tab==='changes'?'var(--nv)':'#9ca3af';
+  q('htab-payments').style.borderBottomColor=tab==='payments'?'var(--nv)':'transparent';
+  q('htab-payments').style.color=tab==='payments'?'var(--nv)':'#9ca3af';
+  q('hm-changes').style.display=tab==='changes'?'block':'none';
+  q('hm-payments').style.display=tab==='payments'?'block':'none';
+  if(_hStaffId)loadHistoryTab(_hStaffId);
+}
+
+async function loadHistoryTab(sid){
+  if(_hTab==='changes'){
+    q('hm-changes').innerHTML='<div style="color:#9ca3af;font-size:12px;text-align:center;padding:20px">Loading...</div>';
+    let entries=[];
+    try{const d=await window.fbGet('history',sid);entries=d&&d.entries?d.entries:[];}catch(e){}
+    if(!entries.length){q('hm-changes').innerHTML='<div style="color:#9ca3af;font-size:13px;text-align:center;padding:30px">No changes recorded yet.<br><span style="font-size:11px">Changes are logged automatically when you edit and save a staff profile.</span></div>';return;}
+    q('hm-changes').innerHTML=entries.map(e=>`
+      <div style="border:1px solid #f0f0f0;border-radius:10px;padding:12px 14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:#374151">📅 ${new Date(e.date).toLocaleDateString('en-GB',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+          <div style="font-size:10px;color:#9ca3af">by ${e.by}</div>
+        </div>
+        ${e.changes.map(c=>`<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px solid #f9fafb;font-size:12px">
+          <span style="font-weight:700;color:#374151;min-width:140px">${c.field}</span>
+          <span style="color:#e24b4a;text-decoration:line-through">${c.from}</span>
+          <span style="color:#9ca3af">→</span>
+          <span style="color:#16a34a;font-weight:600">${c.to}</span>
+        </div>`).join('')}
+      </div>`).join('');
+  } else {
+    // Payment Summary tab
+    const s=S.find(x=>x.id===sid);if(!s)return;
+    const y=new Date().getFullYear();
+    let rows='',total=0,months=0;
+    for(let m=1;m<=12;m++){
+      const key=mkKey(m,y);
+      const e=P[key]&&P[key][sid];
+      if(!e&&m>new Date().getMonth()+1)continue;
+      const c=calcM(s,e||{},key);
+      if(c.net>0){total+=c.net;months++;}
+      const isPast=m<=new Date().getMonth()+1;
+      rows+=`<tr style="border-bottom:1px solid #f3f4f6${!isPast?';opacity:.4':''}">
+        <td style="padding:7px 10px;font-size:13px;font-weight:600">${MTH[m-1]}</td>
+        <td style="padding:7px 10px;font-size:12px;color:#6b7280;text-align:right">${c.bG>0?fmt(c.bG)+' ฿':'—'}</td>
+        <td style="padding:7px 10px;font-size:12px;color:#6b7280;text-align:right">${c.gross-c.bG>0?fmt(c.gross-c.bG)+' ฿':'—'}</td>
+        <td style="padding:7px 10px;font-size:13px;font-weight:700;text-align:right;color:${c.net>0?'var(--nv)':'#9ca3af'}">${c.net>0?fmt(c.net)+' ฿':'—'}</td>
+      </tr>`;
+    }
+    const avg=months>0?total/months:0;
+    q('hm-payments').innerHTML=`
+      <div style="margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;background:#eff6ff;border-radius:9px;padding:10px 14px;min-width:120px"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase">Year Total</div><div style="font-size:18px;font-weight:800;color:var(--nv)">${fmt(total)} ฿</div></div>
+        <div style="flex:1;background:#f0fdf4;border-radius:9px;padding:10px 14px;min-width:120px"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase">Avg/Month</div><div style="font-size:18px;font-weight:800;color:#16a34a">${fmt(avg)} ฿</div></div>
+        <div style="flex:1;background:#fefce8;border-radius:9px;padding:10px 14px;min-width:120px"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase">Months Paid</div><div style="font-size:18px;font-weight:800;color:#f59e0b">${months}</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <tr style="background:#f8fafc"><th style="padding:7px 10px;font-size:11px;color:#6b7280;text-align:left;font-weight:700">Month</th><th style="padding:7px 10px;font-size:11px;color:#6b7280;text-align:right;font-weight:700">Base</th><th style="padding:7px 10px;font-size:11px;color:#6b7280;text-align:right;font-weight:700">Extras</th><th style="padding:7px 10px;font-size:11px;color:#6b7280;text-align:right;font-weight:700">Net Pay</th></tr>
+        ${rows}
+        <tr style="background:#1e3a5f"><td colspan="3" style="padding:9px 10px;font-size:13px;font-weight:700;color:#fff">Total ${y}</td><td style="padding:9px 10px;font-size:15px;font-weight:800;color:#fde68a;text-align:right">${fmt(total)} ฿</td></tr>
+      </table>`;
+  }
 }
 
 function rPay(){
