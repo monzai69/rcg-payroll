@@ -2357,7 +2357,7 @@ function rLeaveBalanceTable(y){
   const cell=(used,allowed)=>{
     const exceeded=used>allowed;
     return'<td style="padding:9px 14px;text-align:center;font-weight:600;'+(exceeded?'color:#e24b4a;background:#fff1f1;':'color:'+(used>0?'#374151':'#9ca3af')+';')+'">'+
-      (used>0||exceeded?used+'/'+allowed+'d':'<span style="color:#e5e7eb">\u2014</span>')+
+      (used+'/'+allowed+'d':'<span style="color:#e5e7eb">\u2014</span>')+
     '</td>';
   };
   document.querySelectorAll('.lvsort-custom').forEach(el=>el.remove());
