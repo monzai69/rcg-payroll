@@ -351,35 +351,55 @@ window.cloudLoad=async()=>{
 <div class="pg" id="pg-leave">
   <div class="ph fx jb ic">
     <div><h1>Leave Management</h1></div>
-    <button class="btn bp" id="btn-add-leave"><i class="ti ti-plus"></i>Add Leave Record</button>
-  </div>
-
-  <!-- Filters -->
-  <div class="card" style="margin-bottom:13px">
-    <div class="fx g8 ic" style="flex-wrap:wrap">
-      <select id="lv-f-s" style="width:180px"><option value="">All Staff</option></select>
-      <select id="lv-f-type" style="width:150px">
-        <option value="">All Types</option>
-        <option value="annual">Annual Leave</option>
-        <option value="sick">Sick Leave</option>
-        <option value="business">Business Leave</option>
-        <option value="custom">Other</option>
-      </select>
-      <select id="lv-f-status" style="width:140px">
-        <option value="">All Status</option>
-        <option value="pending">Pending</option>
-        <option value="approved">Approved</option>
-        <option value="rejected">Rejected</option>
-      </select>
+    <div class="fx g8 ic">
       <select id="lv-f-y" style="width:100px"></select>
+      <button class="btn bp" id="btn-add-leave"><i class="ti ti-plus"></i>Add Leave Record</button>
     </div>
   </div>
 
-  <!-- Leave Balance Overview -->
-  <div id="lv-balance-area" style="margin-bottom:13px"></div>
+  <!-- Section 1: Pending Approvals -->
+  <div id="lv-pending-section" style="display:none;margin-bottom:16px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#f59e0b;margin-bottom:8px">⏳ Pending Approvals</div>
+    <div id="lv-pending-list"></div>
+  </div>
 
-  <!-- Leave Records -->
-  <div id="lv-list"></div>
+  <!-- Section 2: Leave Balance Table -->
+  <div class="card" style="margin-bottom:16px;padding:0;overflow:hidden">
+    <div style="padding:12px 16px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Leave Balance</div>
+      <div style="font-size:11px;color:#9ca3af">Click column header to sort · Click row to view history</div>
+    </div>
+    <div style="overflow-x:auto">
+      <table id="lv-balance-table" style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f8fafc;border-bottom:2px solid #e5e7eb">
+            <th id="lvsort-name" class="lvsort" style="padding:10px 14px;text-align:left;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Name <span class="sort-arrow">↕</span></th>
+            <th id="lvsort-annual" class="lvsort" style="padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Annual <span class="sort-arrow">↕</span></th>
+            <th id="lvsort-sick" class="lvsort" style="padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Sick <span class="sort-arrow">↕</span></th>
+            <th id="lvsort-business" class="lvsort" style="padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Business <span class="sort-arrow">↕</span></th>
+            <th id="lvsort-total" class="lvsort" style="padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Total Used <span class="sort-arrow">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="lv-balance-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section 3: Approved/Rejected Records -->
+  <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Approved / Rejected Records</div>
+    <div class="fx g8 ic" style="flex-wrap:wrap">
+      <select id="lv-f-s" style="width:160px"><option value="">All Staff</option></select>
+      <select id="lv-f-type" style="width:140px">
+        <option value="">All Types</option>
+        <option value="annual">Annual</option>
+        <option value="sick">Sick</option>
+        <option value="business">Business</option>
+        <option value="custom">Other</option>
+      </select>
+    </div>
+  </div>
+  <div id="lv-done-list"></div>
 </div>
 
 <div class="pg" id="pg-docs">
@@ -2258,6 +2278,8 @@ function getLeaveBal(s,year){
 }
 
 // ── LEAVE PAGE ──
+let _lvSortCol='name',_lvSortDir=1;
+
 function initLeaveSelectors(){
   const ysel=q('lv-f-y');
   if(ysel&&!ysel.querySelector('option[value="2025"]')){
@@ -2266,51 +2288,128 @@ function initLeaveSelectors(){
   }
   const ssel=q('lv-f-s');
   if(ssel){ssel.innerHTML='<option value="">All Staff</option>'+S.filter(s=>s.ct==='permanent'&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');}
-  [q('lv-f-s'),q('lv-f-type'),q('lv-f-status'),q('lv-f-y')].forEach(el=>{if(el)el.onchange=rLeavePage;});
+  [q('lv-f-s'),q('lv-f-type'),q('lv-f-y')].forEach(el=>{if(el)el.onchange=rLeavePage;});
+  document.querySelectorAll('.lvsort').forEach(th=>{
+    th.addEventListener('click',function(){
+      const col=this.id.replace('lvsort-','');
+      if(_lvSortCol===col)_lvSortDir*=-1;else{_lvSortCol=col;_lvSortDir=1;}
+      document.querySelectorAll('.sort-arrow').forEach(a=>a.textContent='\u2195');
+      this.querySelector('.sort-arrow').textContent=_lvSortDir===1?'\u2191':'\u2193';
+      rLeaveBalanceTable(parseInt(qv('lv-f-y'))||new Date().getFullYear());
+    });
+  });
 }
 
 function rLeavePage(){
-  const sf=qv('lv-f-s'),tf=qv('lv-f-type'),stf=qv('lv-f-status'),y=parseInt(qv('lv-f-y'))||new Date().getFullYear();
-  // Balance overview
-  const balArea=q('lv-balance-area');
-  const permStaff=S.filter(s=>s.ct==='permanent'&&s.st==='Active'&&(!sf||s.id===sf));
-  balArea.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+permStaff.map(s=>{
-    const bal=getLeaveBal(s,y);
-    const hasExcess=bal.some(b=>b.excess>0);
-    return'<div style="background:#fff;border:1.5px solid '+(hasExcess?'#fca5a5':'#e5e7eb')+';border-radius:10px;padding:10px 14px;min-width:200px;flex:1">'+
-      '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">'+s.nn+' '+s.fn+'</div>'+
-      bal.map(b=>'<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0;color:'+(b.excess>0?'#e24b4a':'#6b7280')+'"><span>'+b.label+'</span><span style="font-weight:600">'+b.used+'/'+b.allowed+'d'+(b.excess>0?' (+'+b.excess+'d excess)':'')+'</span></div>').join('')+
-      '</div>';
-  }).join('')+'</div>';
-  // Records list
-  let f=LVR.filter(r=>{
-    const s=S.find(x=>x.id===r.staffId);
-    return(!sf||r.staffId===sf)&&(!tf||r.type===tf)&&(!stf||r.status===stf)&&r.year===y&&s&&s.ct==='permanent';
-  }).sort((a,b)=>b.from.localeCompare(a.from));
-  const list=q('lv-list');
-  if(!f.length){list.innerHTML='<div class="card"><div class="no-data">No leave records</div></div>';return;}
-  list.innerHTML=f.map(r=>{
+  const y=parseInt(qv('lv-f-y'))||new Date().getFullYear();
+  rLeavePending();
+  rLeaveBalanceTable(y);
+  rLeaveDoneList(y);
+}
+
+function rLeavePending(){
+  const pending=LVR.filter(r=>r.status==='pending');
+  const sec=q('lv-pending-section');
+  if(!pending.length){sec.style.display='none';return;}
+  sec.style.display='block';
+  q('lv-pending-list').innerHTML=pending.map(r=>{
     const s=S.find(x=>x.id===r.staffId);
     const typeLabel={annual:'Annual',sick:'Sick',business:'Business',custom:r.customName||'Other'};
-    const stCol={approved:'#16a34a',pending:'#f59e0b',rejected:'#e24b4a'};
-    return'<div class="card" style="margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">'+
-      '<div class="av" style="width:36px;height:36px;font-size:13px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'flex-shrink:0">'+(s?(s.nn||'?')[0]:'?')+'</div>'+
+    return'<div class="card" style="margin-bottom:8px;border-left:3px solid #f59e0b;display:flex;gap:12px;align-items:flex-start;padding:12px 14px">'+
+      '<div class="av" style="width:36px;height:36px;font-size:13px;flex-shrink:0;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div>'+
       '<div style="flex:1">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'+
-          '<div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+'</div>'+
-          '<div style="display:flex;gap:6px;align-items:center">'+
-            '<span style="font-size:11px;font-weight:700;color:'+stCol[r.status]+';background:'+stCol[r.status]+'1a;padding:2px 8px;border-radius:20px">'+r.status.toUpperCase()+'</span>'+
-            '<button class="btn bo bsm" onclick="openLeave(\''+r.id+'\')"><i class="ti ti-edit"></i></button>'+
-            (r.status==='pending'?'<button class="btn bok bsm" onclick="approveLeave(\''+r.id+'\')"><i class="ti ti-check"></i>Approve</button><button class="btn bx bsm" onclick="rejectLeave(\''+r.id+'\')"><i class="ti ti-x"></i>Reject</button>':'')+
-          '</div>'+
-        '</div>'+
-        '<div style="font-size:12px;color:#6b7280">'+typeLabel[r.type]+' · '+r.days+' day(s) · '+r.from+(r.to&&r.to!==r.from?' → '+r.to:'')+'</div>'+
+        '<div style="font-weight:700;font-size:13px;margin-bottom:2px">'+(s?s.nn+' '+s.fn:'?')+'</div>'+
+        '<div style="font-size:12px;color:#6b7280">'+typeLabel[r.type]+' \u00b7 '+r.days+' day(s) \u00b7 '+r.from+(r.to&&r.to!==r.from?' \u2192 '+r.to:'')+'</div>'+
         (r.reason?'<div style="font-size:11px;color:#9ca3af;margin-top:2px">'+r.reason+'</div>':'')+
-        (r.cert?'<div style="margin-top:6px"><img src="'+r.cert+'" style="max-height:60px;border-radius:6px;cursor:pointer" onclick="window.open(this.src)"></div>':'')+
+        (r.cert?'<div style="margin-top:6px"><img src="'+r.cert+'" style="max-height:60px;border-radius:6px;cursor:pointer" onclick="window.open(this.src)" title="Medical Certificate"></div>':'')+
+      '</div>'+
+      '<div class="fx g8 ic">'+
+        '<button class="btn bok bsm" onclick="approveLeave(\''+r.id+'\')"><i class="ti ti-check"></i>Approve</button>'+
+        '<button class="btn bx bsm" onclick="rejectLeave(\''+r.id+'\')"><i class="ti ti-x"></i>Reject</button>'+
+        '<button class="btn bo bsm" onclick="openLeave(\''+r.id+'\')"><i class="ti ti-edit"></i></button>'+
       '</div>'+
     '</div>';
   }).join('');
 }
+
+function rLeaveBalanceTable(y){
+  const permStaff=S.filter(s=>s.ct==='permanent'&&s.st==='Active');
+  const customNames=[];
+  permStaff.forEach(s=>{(getLeaveAllowance(s).custom||[]).forEach(c=>{if(!customNames.includes(c.name))customNames.push(c.name);});});
+  let rows=permStaff.map(s=>{
+    const allow=getLeaveAllowance(s);
+    const annual=getLeaveUsed(s.id,y,'annual',null);
+    const sick=getLeaveUsed(s.id,y,'sick',null);
+    const business=getLeaveUsed(s.id,y,'business',null);
+    const customUsed=customNames.map(n=>getLeaveUsed(s.id,y,'custom',n));
+    const total=annual+sick+business+customUsed.reduce((a,b)=>a+b,0);
+    return{s,annual,sick,business,customUsed,total,aAllow:allow.annual,sAllow:allow.sick,bAllow:allow.business,cAllow:customNames.map(n=>(allow.custom||[]).find(c=>c.name===n)||{days:0})};
+  });
+  rows.sort((a,b)=>{
+    let av,bv;
+    if(_lvSortCol==='name')av=(a.s.nn+a.s.fn).toLowerCase(),bv=(b.s.nn+b.s.fn).toLowerCase();
+    else if(_lvSortCol==='annual')av=a.annual,bv=b.annual;
+    else if(_lvSortCol==='sick')av=a.sick,bv=b.sick;
+    else if(_lvSortCol==='business')av=a.business,bv=b.business;
+    else av=a.total,bv=b.total;
+    return av>bv?_lvSortDir:av<bv?-_lvSortDir:0;
+  });
+  const cell=(used,allowed)=>{
+    const exceeded=used>allowed;
+    return'<td style="padding:9px 14px;text-align:center;font-weight:600;'+(exceeded?'color:#e24b4a;background:#fff1f1;':'color:'+(used>0?'#374151':'#9ca3af')+';')+'">'+
+      (used>0||exceeded?used+'/'+allowed+'d':'<span style="color:#e5e7eb">\u2014</span>')+
+    '</td>';
+  };
+  document.querySelectorAll('.lvsort-custom').forEach(el=>el.remove());
+  const thead=document.querySelector('#lv-balance-table thead tr');
+  const totalTh=document.getElementById('lvsort-total');
+  customNames.forEach(n=>{
+    if(!document.getElementById('lvsort-custom-'+n)){
+      const th=document.createElement('th');
+      th.id='lvsort-custom-'+n;th.className='lvsort lvsort-custom';
+      th.style.cssText='padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151';
+      th.innerHTML=n+' <span class="sort-arrow">\u2195</span>';
+      th.addEventListener('click',function(){_lvSortCol='custom-'+n;_lvSortDir*=-1;rLeaveBalanceTable(y);});
+      thead.insertBefore(th,totalTh);
+    }
+  });
+  const tbody=q('lv-balance-tbody');
+  tbody.innerHTML=rows.map(r=>'<tr style="border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="openHistory(\''+r.s.id+'\');setTimeout(()=>switchHTab(\'leave\'),200)" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">'+
+    '<td style="padding:9px 14px;font-weight:600;white-space:nowrap"><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:26px;height:26px;font-size:11px;background:'+avbg(r.s.dept)+';color:'+avfg(r.s.dept)+'">'+(r.s.nn||'?')[0]+'</div>'+r.s.nn+' '+r.s.fn+'</div></td>'+
+    cell(r.annual,r.aAllow)+cell(r.sick,r.sAllow)+cell(r.business,r.bAllow)+
+    r.customUsed.map((u,i)=>cell(u,r.cAllow[i]?r.cAllow[i].days:0)).join('')+
+    '<td style="padding:9px 14px;text-align:center;font-weight:700;color:'+(r.total>0?'var(--nv)':'#9ca3af')+'">'+r.total+'d</td>'+
+  '</tr>').join('');
+}
+
+function rLeaveDoneList(y){
+  const sf=qv('lv-f-s'),tf=qv('lv-f-type');
+  const done=LVR.filter(r=>{
+    const s=S.find(x=>x.id===r.staffId);
+    return(r.status==='approved'||r.status==='rejected')&&r.year===y&&(!sf||r.staffId===sf)&&(!tf||r.type===tf)&&s&&s.ct==='permanent';
+  }).sort((a,b)=>b.from.localeCompare(a.from));
+  const list=q('lv-done-list');
+  if(!done.length){list.innerHTML='<div class="card"><div class="no-data">No approved/rejected records for '+y+'</div></div>';return;}
+  const stCol={approved:'#16a34a',rejected:'#e24b4a'};
+  const typeLabel={annual:'Annual',sick:'Sick',business:'Business',custom:'Other'};
+  list.innerHTML=done.map(r=>{
+    const s=S.find(x=>x.id===r.staffId);
+    return'<div class="card" style="margin-bottom:8px;display:flex;gap:12px;align-items:flex-start;padding:12px 14px">'+
+      '<div class="av" style="width:36px;height:36px;font-size:13px;flex-shrink:0;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div>'+
+      '<div style="flex:1">'+
+        '<div style="font-weight:700;font-size:13px;margin-bottom:2px">'+(s?s.nn+' '+s.fn:'?')+'</div>'+
+        '<div style="font-size:12px;color:#6b7280">'+(typeLabel[r.type]||r.type)+(r.customName?' \u2014 '+r.customName:'')+' \u00b7 '+r.days+' day(s) \u00b7 '+r.from+(r.to&&r.to!==r.from?' \u2192 '+r.to:'')+'</div>'+
+        (r.reason?'<div style="font-size:11px;color:#9ca3af;margin-top:2px">'+r.reason+'</div>':'')+
+        (r.cert?'<div style="margin-top:6px"><img src="'+r.cert+'" style="max-height:50px;border-radius:6px;cursor:pointer" onclick="window.open(this.src)"></div>':'')+
+      '</div>'+
+      '<div class="fx g8 ic">'+
+        '<span style="font-size:11px;font-weight:700;color:'+stCol[r.status]+';background:'+stCol[r.status]+'1a;padding:3px 10px;border-radius:20px;white-space:nowrap">'+r.status.toUpperCase()+'</span>'+
+        '<button class="btn bo bsm" onclick="openLeave(\''+r.id+'\')"><i class="ti ti-edit"></i></button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
 
 // ── LEAVE MODAL ──
 let _eLvId=null,_lvCertData=null;
