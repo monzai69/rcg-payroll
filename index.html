@@ -175,7 +175,7 @@ window.fbGetAll=async(col)=>{try{const s=await getDocs(collection(db,col));retur
 
 // ── CLOUD SYNC ──
 window.cloudSave=async(key,data)=>{
-  const map={[SK]:'staff',[PK]:'payroll',[CK]:'company',[AK]:'advance',[APK]:'anytime',[BK]:'branches',[LK]:'logos',[SSK]:'sigstamp'};
+  const map={[SK]:'staff',[PK]:'payroll',[CK]:'company',[AK]:'advance',[APK]:'anytime',[BK]:'branches',[LK]:'logos',[SSK]:'sigstamp',[LVRK]:'leaves'};
   const col=map[key];if(!col||!window._fbReady)return;
   // logos and sigstamp have base64 images — store separately to avoid 1MB limit
   if(col==='logos'||col==='sigstamp'){
@@ -201,7 +201,7 @@ window.cloudLoad=async()=>{
       if(el){el.textContent=msg;el.style.color=ok?'#16a34a':'#e24b4a';el.style.display='block';setTimeout(()=>{el.style.display='none';},3000);}
     };
     showStatus('☁️ Syncing from cloud...', true);
-    const keys=['staff','payroll','company','advance','anytime','branches','logos','sigstamp'];
+    const keys=['staff','payroll','company','advance','anytime','branches','logos','sigstamp','leaves'];
     const results=await Promise.all(keys.map(k=>window.fbGet('config',k)));
     const [staff,payroll,company,advance,anytime,branches,logos,sigstamp]=results;
     let loaded=false;
@@ -213,6 +213,8 @@ window.cloudLoad=async()=>{
     if(branches&&branches.data){try{B=JSON.parse(branches.data);localStorage.setItem(BK,branches.data);}catch{}}
     if(logos){LOGOS=Object.assign({rcg:null,clinic:null,mode:'rcg'},logos);localStorage.setItem(LK,JSON.stringify(LOGOS));}
     if(sigstamp){SIGSTAMP=Object.assign({sig:null,stamp:null,showStamp:true},sigstamp);localStorage.setItem(SSK,JSON.stringify(SIGSTAMP));}
+    const leaves=results[8];
+    if(leaves&&leaves.data){try{LVR=JSON.parse(leaves.data);localStorage.setItem(LVRK,leaves.data);}catch{}}
     if(loaded){
       showStatus('✅ Synced from cloud', true);
       // Refresh UI with cloud data
@@ -262,6 +264,7 @@ window.cloudLoad=async()=>{
     <div class="ni" data-pg="pay"><i class="ti ti-calculator"></i>Monthly Payroll</div>
     <div class="ni" data-pg="anytime"><i class="ti ti-clock-dollar"></i>Anytime Pay</div>
     <div class="ni" data-pg="adv"><i class="ti ti-credit-card"></i>Advance</div>
+    <div class="ni" data-pg="leave"><i class="ti ti-calendar-off"></i>Leave</div>
     <div class="ni" data-pg="docs"><i class="ti ti-file-text"></i>Documents</div>
     <div class="ni" data-pg="cfg"><i class="ti ti-settings"></i>Settings</div>
   </div>
@@ -342,6 +345,41 @@ window.cloudLoad=async()=>{
   <div class="ph fx jb ic"><div><h1>Advance</h1></div><button class="btn bp" id="btn-add-adv"><i class="ti ti-plus"></i>Record Advance</button></div>
   <div class="card" style="margin-bottom:13px"><div class="fx g8 ic" style="flex-wrap:wrap"><select id="af-s" style="width:180px"><option value="">All Staff</option></select><select id="af-m" style="width:150px"><option value="">All Periods</option></select><select id="af-st" style="width:130px"><option value="">All</option><option value="pending">Pending</option><option value="deducted">Deducted</option></select></div></div>
   <div id="adv-list"></div>
+</div>
+
+<!-- LEAVE PAGE -->
+<div class="pg" id="pg-leave">
+  <div class="ph fx jb ic">
+    <div><h1>Leave Management</h1></div>
+    <button class="btn bp" id="btn-add-leave"><i class="ti ti-plus"></i>Add Leave Record</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="card" style="margin-bottom:13px">
+    <div class="fx g8 ic" style="flex-wrap:wrap">
+      <select id="lv-f-s" style="width:180px"><option value="">All Staff</option></select>
+      <select id="lv-f-type" style="width:150px">
+        <option value="">All Types</option>
+        <option value="annual">Annual Leave</option>
+        <option value="sick">Sick Leave</option>
+        <option value="business">Business Leave</option>
+        <option value="custom">Other</option>
+      </select>
+      <select id="lv-f-status" style="width:140px">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <select id="lv-f-y" style="width:100px"></select>
+    </div>
+  </div>
+
+  <!-- Leave Balance Overview -->
+  <div id="lv-balance-area" style="margin-bottom:13px"></div>
+
+  <!-- Leave Records -->
+  <div id="lv-list"></div>
 </div>
 
 <div class="pg" id="pg-docs">
@@ -537,6 +575,66 @@ window.cloudLoad=async()=>{
 
 </div></div>
 
+<!-- LEAVE MODAL -->
+<div class="modal-overlay" id="lvm">
+<div class="modal-box" style="max-width:500px">
+  <div style="font-size:16px;font-weight:700;color:var(--nv);margin-bottom:16px" id="lvm-title">Add Leave Record</div>
+  <div class="g2" style="margin-bottom:11px">
+    <div class="fr"><label>Staff</label><select id="lv-s"><option value="">-- Select --</option></select></div>
+    <div class="fr"><label>Leave Type</label>
+      <select id="lv-type">
+        <option value="annual">Annual Leave</option>
+        <option value="sick">Sick Leave</option>
+        <option value="business">Business Leave</option>
+        <option value="custom">Other (custom)</option>
+      </select>
+    </div>
+  </div>
+  <div class="fr" id="lv-custom-row" style="display:none;margin-bottom:11px"><label>Custom Leave Name</label><input id="lv-custom-name" type="text" placeholder="e.g. ลาพักร้อนพิเศษ"></div>
+  <div class="g2" style="margin-bottom:11px">
+    <div class="fr"><label>From Date</label><input type="date" id="lv-from"></div>
+    <div class="fr"><label>To Date</label><input type="date" id="lv-to"></div>
+  </div>
+  <div class="g2" style="margin-bottom:11px">
+    <div class="fr"><label>Days</label>
+      <div class="fx g8 ic">
+        <input type="number" id="lv-days" step="0.5" min="0.5" placeholder="0.5" style="flex:1" oninput="calcLvDeduct()">
+        <select id="lv-half" style="width:110px" onchange="calcLvDeduct()">
+          <option value="full">Full day(s)</option>
+          <option value="half">Half day</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr"><label>Reason</label><input type="text" id="lv-reason" placeholder="e.g. กลับบ้าน"></div>
+  </div>
+  <!-- Balance & deduction preview -->
+  <div id="lv-preview" style="display:none;background:#f8fafc;border-radius:9px;padding:12px 14px;margin-bottom:12px;font-size:12px"></div>
+  <!-- Medical cert upload (sick leave) -->
+  <div id="lv-cert-row" style="display:none;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">Medical Certificate <span style="color:#9ca3af;font-weight:400">(required for 2+ consecutive sick days)</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:var(--nv);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600">
+        <i class="ti ti-upload" style="font-size:13px"></i>Upload Image
+        <input type="file" id="lv-cert-input" accept="image/*" style="display:none">
+      </label>
+      <span id="lv-cert-name" style="font-size:11px;color:#6b7280"></span>
+    </div>
+    <div id="lv-cert-preview" style="margin-top:8px"></div>
+  </div>
+  <div class="fr" style="margin-bottom:12px"><label>Status</label>
+    <select id="lv-status">
+      <option value="approved">Approved</option>
+      <option value="pending">Pending</option>
+      <option value="rejected">Rejected</option>
+    </select>
+  </div>
+  <div class="fx g8 jb mt16">
+    <button class="btn bx bsm" id="btn-del-leave" style="display:none"><i class="ti ti-trash"></i>Delete</button>
+    <div class="fx g8"><button class="btn bo" onclick="closeM('lvm')">Cancel</button><button class="btn bp" id="btn-save-leave"><i class="ti ti-check"></i>Save</button></div>
+  </div>
+</div>
+</div>
+
 <!-- HISTORY MODAL -->
 <div class="modal-overlay" id="hm">
 <div class="modal-box" style="max-width:600px;max-height:85vh;overflow-y:auto">
@@ -548,9 +646,11 @@ window.cloudLoad=async()=>{
   <div style="display:flex;gap:0;border-bottom:2px solid #f0f0f0;margin-bottom:16px">
     <button id="htab-changes" onclick="switchHTab('changes')" style="padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid var(--nv);color:var(--nv);margin-bottom:-2px">📋 Change History</button>
     <button id="htab-payments" onclick="switchHTab('payments')" style="padding:8px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:#9ca3af;margin-bottom:-2px">💰 Payment Summary</button>
+    <button id="htab-leave" onclick="switchHTab('leave')" style="padding:8px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:#9ca3af;margin-bottom:-2px">🏖️ Leave</button>
   </div>
   <div id="hm-changes"></div>
   <div id="hm-payments" style="display:none"></div>
+  <div id="hm-leave" style="display:none"></div>
 </div>
 </div>
 
@@ -641,6 +741,20 @@ window.cloudLoad=async()=>{
     <button class="btn bo bsm mt8" id="btn-atier"><i class="ti ti-plus"></i>Add Tier</button>
   </div>
   <div class="dv"></div>
+  <div id="s-leave-section" style="display:none">
+    <div class="st" style="margin-bottom:8px">Leave Allowance (per year)</div>
+    <div class="ts tm" style="margin-bottom:10px">Permanent staff only. Paid leave — salary deducted only when days exceeded.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="fr"><label>Annual Leave (days)</label><input type="number" id="s-lv-annual" value="6" min="0" step="0.5"></div>
+      <div class="fr"><label>Sick Leave (days)</label><input type="number" id="s-lv-sick" value="30" min="0" step="0.5"></div>
+      <div class="fr"><label>Business Leave (days)</label><input type="number" id="s-lv-business" value="3" min="0" step="0.5"></div>
+    </div>
+    <!-- Custom leave types -->
+    <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Custom Leave Types</div>
+    <div id="s-lv-custom-rows" style="margin-bottom:6px"></div>
+    <button type="button" class="btn bo bsm" id="btn-add-custom-leave"><i class="ti ti-plus"></i>Add Custom Type</button>
+  </div>
+  <div class="dv"></div>
   <div class="fx jb ic" style="margin-bottom:7px">
     <div class="st" style="margin:0;border:none;padding:0">6-Month Incentive</div>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:600">
@@ -713,8 +827,8 @@ window.cloudLoad=async()=>{
 </div></div>
 
 <script>
-const SK='rcg10_s',PK='rcg10_p',CK='rcg10_c',AK='rcg10_a',APK='rcg10_ap',BK='rcg10_b',LK='rcg10_logos',SSK='rcg10_sigstamp';
-let S=[],P={},C={},A=[],AP=[],B=[],LOGOS={rcg:null,clinic:null,mode:'rcg'},SIGSTAMP={sig:null,stamp:null,showStamp:true};
+const SK='rcg10_s',PK='rcg10_p',CK='rcg10_c',AK='rcg10_a',APK='rcg10_ap',BK='rcg10_b',LK='rcg10_logos',SSK='rcg10_sigstamp',LVRK='rcg10_leaves';
+let S=[],P={},C={},A=[],AP=[],B=[],LOGOS={rcg:null,clinic:null,mode:'rcg'},SIGSTAMP={sig:null,stamp:null,showStamp:true},LVR=[];
 let _eSid=null,_eBid=null,_eAid=null,_eAPid=null;
 
 function ld(){
@@ -726,6 +840,7 @@ function ld(){
   try{B=JSON.parse(localStorage.getItem(BK)||'[]')}catch{B=[]}
   try{LOGOS=Object.assign({rcg:null,clinic:null,mode:'rcg'},JSON.parse(localStorage.getItem(LK)||'{}'))}catch{LOGOS={rcg:null,clinic:null,mode:'rcg'}}
   try{SIGSTAMP=Object.assign({sig:null,stamp:null,showStamp:true},JSON.parse(localStorage.getItem(SSK)||'{}'))}catch{SIGSTAMP={sig:null,stamp:null,showStamp:true}}
+  try{LVR=JSON.parse(localStorage.getItem(LVRK)||'[]')}catch{LVR=[]}
   C=Object.assign({cth:'บริษัท เรดี้ เช็ค โก กรุ๊ป จำกัด',addr:'496/14 ถนนสาธุประดิษฐ์ แขวงบางโพงพาง เขตยานนาวา กรุงเทพฯ 10120',sgn:'สมน สถิตยางกูร (ผู้บริหารการเงิน)',sso:5,ssoC:17500,wht:3,d50:100000,pers:60000,depts:[{name:'CEO',days:26,hrs:9},{name:'COO',days:26,hrs:9},{name:'Marketing',days:22,hrs:9},{name:'Operation',days:26,hrs:9},{name:'Operation-Front',days:24,hrs:9},{name:'Admin',days:26,hrs:9},{name:'HR',days:26,hrs:9}],itemNames:['ค่ามือ','เบี้ยขยัน','ค่าตำแหน่ง','Incentive','Support','Commission','DF (Doctor Fee)','โบนัส','รีวิว','อื่นๆ']},C);
   if(!Array.isArray(C.depts))C.depts=[{name:'Operation',days:26,hrs:9}];
   // Migrate string depts to objects
@@ -738,7 +853,7 @@ function ld(){
   svS();
 }
 const sv=(k,v)=>{const s=JSON.stringify(v);localStorage.setItem(k,s);if(window.cloudSave)window.cloudSave(k,s);else window.addEventListener('fbready',()=>window.cloudSave(k,s),{once:true});};
-const svS=()=>sv(SK,S),svP=()=>sv(PK,P),svC=()=>sv(CK,C),svA=()=>sv(AK,A),svAP=()=>sv(APK,AP),svB=()=>sv(BK,B),svL=()=>sv(LK,LOGOS),svSS=()=>sv(SSK,SIGSTAMP);
+const svS=()=>sv(SK,S),svP=()=>sv(PK,P),svC=()=>sv(CK,C),svA=()=>sv(AK,A),svAP=()=>sv(APK,AP),svB=()=>sv(BK,B),svL=()=>sv(LK,LOGOS),svSS=()=>sv(SSK,SIGSTAMP),svLV=()=>sv(LVRK,LVR);
 
 function seedB(){B=[{id:'br1',name:'RCG Silom',addr:'496/14 ถนนสาธุประดิษฐ์',lic:'',tel:'',certname:''},{id:'br2',name:'LIV Clinic Samui',addr:'เกาะสมุย จังหวัดสุราษฎร์ธานี',lic:'10101028777',tel:'',certname:'ลีฟ คลินิกเวชกรรม สาขาเกาะสมุย'},{id:'br3',name:'Carebox',addr:'',lic:'',tel:'',certname:''}];svB()}
 function seedS(){const d=[{fn:'นราทัย',ln:'วิเชียรกัลยารัตน์',nn:'ไท่',dept:'CEO',pos:'CEO',br:'br1',sd:'2021-08-18',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'สมน',ln:'สถิตยางกูร',nn:'มน',dept:'COO',pos:'COO-CFO',br:'br1',sd:'2021-08-18',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'มาเรีย',ln:'อาลี',nn:'ลูกตาล',dept:'Marketing',pos:'Graphic',br:'br1',sd:'2021-09-01',base:14500,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ตะวันฉาย',ln:'คีรีนาวงศ์',nn:'เก๋',dept:'Operation',pos:'Admin',br:'br1',sd:'2022-01-15',base:12000,emptype:'fulltime',ct:'permanent',ex:0,otrate:75,items:[{id:'i1',name:'ค่าตำแหน่ง',type:'fixed',val:2500,isWHT:false,isDiligence:false}]},{fn:'นพรัตน์',ln:'เรืองโรจน์',nn:'แนตตี้',dept:'Marketing',pos:'Marketing Manager',br:'br1',sd:'2022-08-01',base:43000,emptype:'fulltime',ct:'permanent',ex:0,otrate:0,items:[{id:'i1',name:'Incentive',type:'comm_flat',val:0.3,isWHT:false,isDiligence:false}]},{fn:'อิงวรินทร์',ln:'เปตามานัง',nn:'บุ๋ม',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2023-10-01',base:15000,emptype:'fulltime',ct:'permanent',ex:0,otrate:0,items:[{id:'id1',name:'ค่าตำแหน่ง',type:'fixed',val:2000,isWHT:false,isDiligence:false},{id:'id2',name:'ค่ามือ',type:'comm_flat',val:2,isWHT:true,isDiligence:false,tiers:[]},{id:'id3',name:'เบี้ยขยัน',type:'fixed',val:1000,isWHT:false,isDiligence:true}]},{fn:'สุภาพ',ln:'โตมา',nn:'แย้ม',dept:'Operation',pos:'House Keeper',br:'br2',sd:'2023-09-15',base:12000,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ฐิตารีย์',ln:'ปรีชาบารมีสุข',nn:'ขวัญ',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2024-01-02',base:15000,emptype:'fulltime',ct:'permanent',ex:0,otrate:63,items:[{id:'i1',name:'Support',type:'fixed',val:1000,isWHT:false,isDiligence:false},{id:'i2',name:'ค่ามือ',type:'comm_flat',val:1.5,isWHT:true,isDiligence:false,tiers:[]}]},{fn:'ไลลา',ln:'กาหมัน',nn:'ไลลา',dept:'Operation',pos:'Sales',br:'br2',sd:'2024-01-13',base:16500,emptype:'fulltime',ct:'permanent',ex:0,otrate:69,items:[{id:'i1',name:'ค่ามือ',type:'comm_tiered',val:0,isWHT:true,isDiligence:false,tiers:[{f:0,t:399999,r:1.5},{f:400000,t:799999,r:2},{f:800000,t:9999999,r:2.5}]}]},{fn:'สุพิชชา',ln:'ทองดา',nn:'หนูนา',dept:'Operation',pos:'Nurse',br:'br2',sd:'2024-04-04',base:0,emptype:'fullparttime',fptmethod:'hourly',hrrate:100,stdhrs:160,ct:'contract',ex:0,otrate:0},{fn:'วีรศักดิ์',ln:'แตงอ่อน',nn:'แชมป์',dept:'Marketing',pos:'Graphic',br:'br1',sd:'2024-05-27',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'แพทย์หญิงสุชากานต์',ln:'โรจน์สราญรมย์',nn:'น้ำ',dept:'Operation',pos:'Doctor',br:'br2',sd:'2024-09-25',base:0,emptype:'parttime',pttype:'doctor',hrrate:500,dhrs:7,df:15,ct:'freelance',ex:0,otrate:0},{fn:'อังศิณา',ln:'ขอยื้อกลาง',nn:'แหม่ม',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2025-01-11',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'Pheth',ln:'Omsene',nn:'นาง',dept:'Operation',pos:'House Keeper',br:'br2',sd:'2025-05-01',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'แพทย์หญิงชิตพัณน์',ln:'ปรีชาทรัพย์',nn:'ต้อง',dept:'Operation',pos:'Doctor',br:'br1',sd:'2026-01-02',base:0,emptype:'parttime',pttype:'doctor',hrrate:500,dhrs:7,df:15,ct:'freelance',ex:0,otrate:0},{fn:'สุพรรณี',ln:'วรนาฏ',nn:'ชบา',dept:'Operation',pos:'Nurse',br:'br2',sd:'2026-01-03',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'จิตสุภา',ln:'พวงยี่สุ้น',nn:'กุ๊กกิ๊ก',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2026-04-21',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'เจณณิษฐา',ln:'โชติวัชร์หิรัญ',nn:'คิม',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2026-03-27',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'วรรณชนก',ln:'เลิศธนกิจไพศาล',nn:'โบ',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2026-05-02',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'นายแพทย์สันติพัฒน์',ln:'จันทร์หอม',nn:'ทัช',dept:'Operation',pos:'Doctor',br:'br1',sd:'2026-03-29',base:0,emptype:'parttime',pttype:'doctor',hrrate:500,dhrs:7,df:15,ct:'freelance',ex:0,otrate:0},{fn:'พีรนนท์',ln:'นวลหนู',nn:'นัน',dept:'Operation',pos:'Digital Marketing',br:'br1',sd:'2025-08-04',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ธนัทวดี',ln:'แก้วจอมสิน',nn:'กรีน',dept:'Operation',pos:'Admin',br:'br1',sd:'2026-01-26',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ธนาลักษณ์',ln:'ฉลูทอง',nn:'หญิง',dept:'Operation',pos:'Nurse',br:'br2',sd:'2026-04-18',base:0,emptype:'fullparttime',fptmethod:'hourly',hrrate:90,stdhrs:160,ct:'contract',ex:0,otrate:0},{fn:'พรรณวษา',ln:'พัสดร',nn:'บอม',dept:'Operation',pos:'Admin',br:'br1',sd:'2026-04-19',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ศิริวรรณ',ln:'กริ่มใจ',nn:'อ้อ',dept:'Operation',pos:'House Keeper',br:'br2',sd:'2026-04-21',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0}];
@@ -898,7 +1013,7 @@ document.querySelectorAll('#nav .ni').forEach(ni=>{
     const pg=this.dataset.pg;
     document.querySelectorAll('#nav .ni').forEach(n=>n.classList.remove('active'));this.classList.add('active');
     document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));q('pg-'+pg).classList.add('active');
-    if(pg==='dash')rDash();if(pg==='staff'){rStaff();rDeptF();}if(pg==='pay')rPay();if(pg==='anytime'){rAPsel();rAPlist();}if(pg==='adv'){rAdvSels();rAdv();}if(pg==='docs'){popDocSels();rPS();rCert();rDocLogoModeUI();}if(pg==='cfg'){ldCfg();rDeptChips();rInameChips();rBrCards();rLogoSettings();}
+    if(pg==='dash')rDash();if(pg==='staff'){rStaff();rDeptF();}if(pg==='pay')rPay();if(pg==='anytime'){rAPsel();rAPlist();}if(pg==='adv'){rAdvSels();rAdv();}if(pg==='leave'){initLeaveSelectors();rLeavePage();}if(pg==='docs'){popDocSels();rPS();rCert();rDocLogoModeUI();}if(pg==='cfg'){ldCfg();rDeptChips();rInameChips();rBrCards();rLogoSettings();}
   });
 });
 
@@ -929,7 +1044,7 @@ function rStaff(){
     const ri=s.emptype==='fulltime'?(s.base?fmt(s.base)+' ฿/mo':'—'):s.emptype==='fullparttime'?(s.fptmethod==='daily'?fmt(s.fptdayrate)+' ฿/day':fmt(s.hrrate)+' ฿/hr'):s.pttype==='doctor'?fmt(s.hrrate)+' ฿/hr+DF':fmt(s.dayrate)+' ฿/day';
     const tx=s.ct==='permanent'?'<span class="badge bperm">ภงด.1</span>':'<span class="badge bcont">WHT</span>';
     const tr=document.createElement('tr');
-    tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td><span class="badge '+(s.st==='Active'?'ba':'bi')+'">'+s.st+'</span></td><td style="white-space:nowrap"></td>';
+    tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td><span class="badge '+(s.st==='Active'?'ba':'bi')+'">'+s.st+'</span></td><td></td>';
     const btn=document.createElement('button');
     btn.className='btn bo bsm';btn.innerHTML='<i class="ti ti-edit"></i>';
     btn.addEventListener('click',function(){openEdit(s.id);});
@@ -979,6 +1094,11 @@ function openAdd(){
   q('s-6m-tier-rows').innerHTML='';q('s-6mlabel').value='';
   q('s-ssoStartM')&&(q('s-ssoStartM').value='');
   q('s-ssoStartY')&&(q('s-ssoStartY').value='');
+  q('s-lv-annual')&&(q('s-lv-annual').value='6');
+  q('s-lv-sick')&&(q('s-lv-sick').value='30');
+  q('s-lv-business')&&(q('s-lv-business').value='3');
+  q('s-lv-custom-rows')&&(q('s-lv-custom-rows').innerHTML='');
+  q('s-leave-section')&&(q('s-leave-section').style.display='none');
   popDeptDl();popBrDl();syncS();openM('sm');
 }
 function openEdit(id){
@@ -1004,6 +1124,14 @@ try{
   // Load ssoStart
   q('s-ssoStartM')&&(q('s-ssoStartM').value=s.ssoStartM||'');
   q('s-ssoStartY')&&(q('s-ssoStartY').value=s.ssoStartY||'');
+  // Load leave allowance
+  const lv=s.leaveAllowance||{};
+  q('s-lv-annual')&&(q('s-lv-annual').value=lv.annual!==undefined?lv.annual:6);
+  q('s-lv-sick')&&(q('s-lv-sick').value=lv.sick!==undefined?lv.sick:30);
+  q('s-lv-business')&&(q('s-lv-business').value=lv.business!==undefined?lv.business:3);
+  q('s-lv-custom-rows')&&(q('s-lv-custom-rows').innerHTML='');
+  (lv.custom||[]).forEach(c=>addCustomLeaveRow(c));
+  q('s-leave-section')&&(q('s-leave-section').style.display=s.ct==='permanent'?'block':'none');
   popDeptDl();popBrDl();syncS();openM('sm');
 }catch(err){console.error('openEdit error:',err);alert('Edit error: '+err.message);}
 }
@@ -1168,6 +1296,7 @@ function saveStaff(){
   if(ssoStartM===1)ssoStartM=null,ssoStartY=null;
   const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:newCt,st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0,
     ssoStartM,ssoStartY,
+    leaveAllowance:newCt==='permanent'?{annual:parseFloat(qv('s-lv-annual'))||6,sick:parseFloat(qv('s-lv-sick'))||30,business:parseFloat(qv('s-lv-business'))||3,custom:getCustomLeaveRows()}:null,
     incentive6m:q('s-has6m').checked?{enabled:true,label:qv('s-6mlabel').trim()||'6M Incentive',tiers:get6mTiers()}:{enabled:false}};
   if(_eSid){
     const i=S.findIndex(x=>x.id===_eSid);
@@ -1247,12 +1376,11 @@ async function openHistory(sid){
 
 function switchHTab(tab){
   _hTab=tab;
-  q('htab-changes').style.borderBottomColor=tab==='changes'?'var(--nv)':'transparent';
-  q('htab-changes').style.color=tab==='changes'?'var(--nv)':'#9ca3af';
-  q('htab-payments').style.borderBottomColor=tab==='payments'?'var(--nv)':'transparent';
-  q('htab-payments').style.color=tab==='payments'?'var(--nv)':'#9ca3af';
-  q('hm-changes').style.display=tab==='changes'?'block':'none';
-  q('hm-payments').style.display=tab==='payments'?'block':'none';
+  ['changes','payments','leave'].forEach(t=>{
+    const btn=q('htab-'+t);
+    if(btn){btn.style.borderBottomColor=tab===t?'var(--nv)':'transparent';btn.style.color=tab===t?'var(--nv)':'#9ca3af';}
+    const el=q('hm-'+t);if(el)el.style.display=tab===t?'block':'none';
+  });
   if(_hStaffId)loadHistoryTab(_hStaffId);
 }
 
@@ -1275,6 +1403,8 @@ async function loadHistoryTab(sid){
           <span style="color:#16a34a;font-weight:600">${c.to}</span>
         </div>`).join('')}
       </div>`).join('');
+  } else if(_hTab==='leave'){
+    loadLeaveTab(_hStaffId);
   } else {
     // Payment Summary tab
     const s=S.find(x=>x.id===sid);if(!s)return;
@@ -1897,7 +2027,8 @@ function exportAllData(){
     advance:A,
     branches:B,
     logos:LOGOS,
-    sigstamp:SIGSTAMP
+    sigstamp:SIGSTAMP,
+    leaves:LVR
   };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -1930,6 +2061,7 @@ function importAllData(){
         if(data.branches){B=data.branches;svB();}
         if(data.logos)   {LOGOS=data.logos;svL();}
         if(data.sigstamp){SIGSTAMP=data.sigstamp;svSS();}
+        if(data.leaves)  {LVR=data.leaves;svLV();}
         // Explicitly push everything to Firebase
         const msg=document.getElementById('backup-msg');
         if(msg){msg.style.display='block';msg.style.background='#fef3c7';msg.style.color='#92400e';msg.textContent='☁️ Syncing to cloud... please wait';}
@@ -1947,6 +2079,7 @@ function importAllData(){
             window.cloudSave(BK,JSON.stringify(B)),
             window.cloudSave(LK,JSON.stringify(LOGOS)),
             window.cloudSave(SSK,JSON.stringify(SIGSTAMP)),
+            window.cloudSave(LVRK,JSON.stringify(LVR)),
           ]);
           if(msg){msg.style.background='#dcfce7';msg.style.color='#16a34a';msg.textContent='✅ Data restored and synced to cloud! '+data.staff.length+' staff. Now open on any device!';}
         };
@@ -2095,6 +2228,251 @@ function initLogoHandlers(){
 }
 
 ld();initSels();rDash();initLogoHandlers();rDocLogoModeUI();
+
+/* ══════════════════ LEAVE MANAGEMENT ══════════════════ */
+
+// ── LEAVE ALLOWANCE HELPERS ──
+function getLeaveAllowance(s){
+  const lv=s.leaveAllowance||{};
+  return{
+    annual:lv.annual!==undefined?lv.annual:6,
+    sick:lv.sick!==undefined?lv.sick:30,
+    business:lv.business!==undefined?lv.business:3,
+    custom:lv.custom||[]
+  };
+}
+
+function getLeaveUsed(sid,year,type,customName){
+  return LVR.filter(r=>r.staffId===sid&&r.status==='approved'&&r.year===year&&r.type===type&&(type!=='custom'||r.customName===customName)).reduce((s,r)=>s+r.days,0);
+}
+
+function getLeaveBal(s,year){
+  const allow=getLeaveAllowance(s);
+  const types=[
+    {key:'annual',label:'Annual',allowed:allow.annual},
+    {key:'sick',label:'Sick',allowed:allow.sick},
+    {key:'business',label:'Business',allowed:allow.business},
+    ...(allow.custom||[]).map(c=>({key:'custom',label:c.name,customName:c.name,allowed:c.days}))
+  ];
+  return types.map(t=>({...t,used:getLeaveUsed(s.id,year,t.key,t.customName||null),excess:Math.max(0,getLeaveUsed(s.id,year,t.key,t.customName||null)-t.allowed)}));
+}
+
+// ── LEAVE PAGE ──
+function initLeaveSelectors(){
+  const ysel=q('lv-f-y');
+  if(ysel&&!ysel.querySelector('option[value="2025"]')){
+    const ny=new Date().getFullYear();
+    [ny-1,ny,ny+1].forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y;if(y===ny)o.selected=true;ysel.appendChild(o);});
+  }
+  const ssel=q('lv-f-s');
+  if(ssel){ssel.innerHTML='<option value="">All Staff</option>'+S.filter(s=>s.ct==='permanent'&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');}
+  [q('lv-f-s'),q('lv-f-type'),q('lv-f-status'),q('lv-f-y')].forEach(el=>{if(el)el.onchange=rLeavePage;});
+}
+
+function rLeavePage(){
+  const sf=qv('lv-f-s'),tf=qv('lv-f-type'),stf=qv('lv-f-status'),y=parseInt(qv('lv-f-y'))||new Date().getFullYear();
+  // Balance overview
+  const balArea=q('lv-balance-area');
+  const permStaff=S.filter(s=>s.ct==='permanent'&&s.st==='Active'&&(!sf||s.id===sf));
+  balArea.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px">'+permStaff.map(s=>{
+    const bal=getLeaveBal(s,y);
+    const hasExcess=bal.some(b=>b.excess>0);
+    return'<div style="background:#fff;border:1.5px solid '+(hasExcess?'#fca5a5':'#e5e7eb')+';border-radius:10px;padding:10px 14px;min-width:200px;flex:1">'+
+      '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">'+s.nn+' '+s.fn+'</div>'+
+      bal.map(b=>'<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0;color:'+(b.excess>0?'#e24b4a':'#6b7280')+'"><span>'+b.label+'</span><span style="font-weight:600">'+b.used+'/'+b.allowed+'d'+(b.excess>0?' (+'+b.excess+'d excess)':'')+'</span></div>').join('')+
+      '</div>';
+  }).join('')+'</div>';
+  // Records list
+  let f=LVR.filter(r=>{
+    const s=S.find(x=>x.id===r.staffId);
+    return(!sf||r.staffId===sf)&&(!tf||r.type===tf)&&(!stf||r.status===stf)&&r.year===y&&s&&s.ct==='permanent';
+  }).sort((a,b)=>b.from.localeCompare(a.from));
+  const list=q('lv-list');
+  if(!f.length){list.innerHTML='<div class="card"><div class="no-data">No leave records</div></div>';return;}
+  list.innerHTML=f.map(r=>{
+    const s=S.find(x=>x.id===r.staffId);
+    const typeLabel={annual:'Annual',sick:'Sick',business:'Business',custom:r.customName||'Other'};
+    const stCol={approved:'#16a34a',pending:'#f59e0b',rejected:'#e24b4a'};
+    return'<div class="card" style="margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">'+
+      '<div class="av" style="width:36px;height:36px;font-size:13px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'flex-shrink:0">'+(s?(s.nn||'?')[0]:'?')+'</div>'+
+      '<div style="flex:1">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'+
+          '<div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+'</div>'+
+          '<div style="display:flex;gap:6px;align-items:center">'+
+            '<span style="font-size:11px;font-weight:700;color:'+stCol[r.status]+';background:'+stCol[r.status]+'1a;padding:2px 8px;border-radius:20px">'+r.status.toUpperCase()+'</span>'+
+            '<button class="btn bo bsm" onclick="openLeave(\''+r.id+'\')"><i class="ti ti-edit"></i></button>'+
+            (r.status==='pending'?'<button class="btn bok bsm" onclick="approveLeave(\''+r.id+'\')"><i class="ti ti-check"></i>Approve</button><button class="btn bx bsm" onclick="rejectLeave(\''+r.id+'\')"><i class="ti ti-x"></i>Reject</button>':'')+
+          '</div>'+
+        '</div>'+
+        '<div style="font-size:12px;color:#6b7280">'+typeLabel[r.type]+' · '+r.days+' day(s) · '+r.from+(r.to&&r.to!==r.from?' → '+r.to:'')+'</div>'+
+        (r.reason?'<div style="font-size:11px;color:#9ca3af;margin-top:2px">'+r.reason+'</div>':'')+
+        (r.cert?'<div style="margin-top:6px"><img src="'+r.cert+'" style="max-height:60px;border-radius:6px;cursor:pointer" onclick="window.open(this.src)"></div>':'')+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+// ── LEAVE MODAL ──
+let _eLvId=null,_lvCertData=null;
+
+function openAddLeave(){
+  _eLvId=null;_lvCertData=null;
+  q('lvm-title').textContent='Add Leave Record';
+  q('btn-del-leave').style.display='none';
+  q('lv-s').innerHTML='<option value="">-- Select --</option>'+S.filter(s=>s.ct==='permanent'&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');
+  q('lv-type').value='annual';q('lv-from').value='';q('lv-to').value='';
+  q('lv-days').value='';q('lv-half').value='full';q('lv-reason').value='';
+  q('lv-status').value='approved';q('lv-custom-row').style.display='none';
+  q('lv-cert-row').style.display='none';q('lv-cert-name').textContent='';q('lv-cert-preview').innerHTML='';
+  q('lv-preview').style.display='none';
+  openM('lvm');
+}
+
+function openLeave(id){
+  const r=LVR.find(x=>x.id===id);if(!r)return;
+  _eLvId=id;_lvCertData=r.cert||null;
+  q('lvm-title').textContent='Edit Leave Record';
+  q('btn-del-leave').style.display='inline-flex';
+  q('lv-s').innerHTML=S.filter(s=>s.ct==='permanent').map(s=>'<option value="'+s.id+'"'+(s.id===r.staffId?' selected':'')+'>'+s.nn+' '+s.fn+'</option>').join('');
+  q('lv-type').value=r.type;q('lv-from').value=r.from;q('lv-to').value=r.to||r.from;
+  q('lv-days').value=r.days;q('lv-half').value=r.days%1===0.5?'half':'full';
+  q('lv-reason').value=r.reason||'';q('lv-status').value=r.status;
+  q('lv-custom-row').style.display=r.type==='custom'?'block':'none';
+  if(r.type==='custom')q('lv-custom-name').value=r.customName||'';
+  q('lv-cert-row').style.display=r.type==='sick'?'block':'none';
+  if(r.cert){q('lv-cert-preview').innerHTML='<img src="'+r.cert+'" style="max-height:80px;border-radius:6px">';q('lv-cert-name').textContent='Certificate uploaded';}
+  calcLvDeduct();openM('lvm');
+}
+
+function calcLvDeduct(){
+  const sid=qv('lv-s'),s=S.find(x=>x.id===sid);
+  const type=qv('lv-type');
+  const days=parseFloat(qv('lv-days'))||0;
+  const from=qv('lv-from'),to=qv('lv-to');
+  // Auto-calc days from date range if days not filled
+  if(from&&to&&!days){
+    const d1=new Date(from),d2=new Date(to);
+    const diff=Math.round((d2-d1)/(1000*60*60*24))+1;
+    q('lv-days').value=qv('lv-half')==='half'?0.5:diff;
+  }
+  // Show/hide cert row
+  q('lv-cert-row').style.display=type==='sick'?'block':'none';
+  q('lv-custom-row').style.display=type==='custom'?'block':'none';
+  if(!s||!days){q('lv-preview').style.display='none';return;}
+  const y=from?parseInt(from.split('-')[0]):new Date().getFullYear();
+  const allow=getLeaveAllowance(s);
+  const typeLabel={annual:'Annual',sick:'Sick',business:'Business',custom:qv('lv-custom-name')||'Other'};
+  const allowDays=type==='annual'?allow.annual:type==='sick'?allow.sick:type==='business'?allow.business:(allow.custom.find(c=>c.name===qv('lv-custom-name'))||{days:0}).days;
+  const used=getLeaveUsed(s.id,y,type,type==='custom'?qv('lv-custom-name'):null);
+  const usedAfter=used+days;
+  const excess=Math.max(0,usedAfter-allowDays);
+  const dept=getDept(s.dept);const daysInMonth=dept.days||26;
+  const dailyRate=(s.base||0)/daysInMonth;
+  const deduct=excess*dailyRate;
+  const prev=q('lv-preview');prev.style.display='block';
+  prev.innerHTML='<div style="font-size:12px"><div style="font-weight:700;color:#374151;margin-bottom:6px">'+typeLabel[type]+' Balance</div>'+
+    '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>Allowance</span><span>'+allowDays+' days</span></div>'+
+    '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>Used (before this)</span><span>'+used+' days</span></div>'+
+    '<div style="display:flex;justify-content:space-between;padding:2px 0;font-weight:700;color:'+(excess>0?'#e24b4a':'#16a34a')+'"><span>After this request</span><span>'+usedAfter+'/'+allowDays+' days</span></div>'+
+    (excess>0?'<div style="margin-top:6px;padding:7px 10px;background:#fee2e2;border-radius:7px;color:#991b1b;font-weight:700">⚠️ '+excess+' excess day(s) → Salary deduction: −'+fmt(deduct)+' ฿ ('+fmt(dailyRate)+' ฿/day)</div>':'<div style="margin-top:6px;padding:7px 10px;background:#dcfce7;border-radius:7px;color:#166534">✅ Within allowance — no deduction</div>')+
+  '</div>';
+}
+
+q('lv-type').addEventListener('change',calcLvDeduct);
+q('lv-s').addEventListener('change',calcLvDeduct);
+q('lv-from').addEventListener('change',()=>{if(!qv('lv-to'))q('lv-to').value=qv('lv-from');calcLvDeduct();});
+q('lv-to').addEventListener('change',calcLvDeduct);
+
+// Medical cert upload
+q('lv-cert-input').addEventListener('change',function(){
+  const f=this.files[0];if(!f)return;
+  if(f.size>3*1024*1024){alert('Image too large (max 3MB)');return;}
+  const rd=new FileReader();
+  rd.onload=e=>{_lvCertData=e.target.result;q('lv-cert-name').textContent=f.name;q('lv-cert-preview').innerHTML='<img src="'+e.target.result+'" style="max-height:80px;border-radius:6px;margin-top:4px">';};
+  rd.readAsDataURL(f);
+});
+
+q('btn-save-leave').addEventListener('click',saveLeave);
+q('btn-del-leave').addEventListener('click',()=>{if(_eLvId&&confirm('Delete this leave record?')){LVR=LVR.filter(x=>x.id!==_eLvId);svLV();closeM('lvm');rLeavePage();}});
+q('btn-add-leave').addEventListener('click',openAddLeave);
+
+function saveLeave(){
+  const sid=qv('lv-s');if(!sid){alert('Select a staff member');return;}
+  const days=parseFloat(qv('lv-days'));if(!days){alert('Enter number of days');return;}
+  const from=qv('lv-from');if(!from){alert('Select start date');return;}
+  const type=qv('lv-type');
+  const year=parseInt(from.split('-')[0]);
+  const nr={
+    id:_eLvId||'LV'+Date.now(),
+    staffId:sid,type,
+    customName:type==='custom'?qv('lv-custom-name').trim():null,
+    from,to:qv('lv-to')||from,
+    days,year,
+    reason:qv('lv-reason').trim(),
+    status:qv('lv-status'),
+    cert:type==='sick'?(_lvCertData||null):null,
+    createdAt:_eLvId?(LVR.find(x=>x.id===_eLvId)||{}).createdAt||new Date().toISOString():new Date().toISOString()
+  };
+  if(_eLvId){const i=LVR.findIndex(x=>x.id===_eLvId);if(i>=0)LVR[i]=nr;else LVR.push(nr);}else LVR.push(nr);
+  svLV();closeM('lvm');rLeavePage();
+}
+
+function approveLeave(id){const r=LVR.find(x=>x.id===id);if(r){r.status='approved';svLV();rLeavePage();}}
+function rejectLeave(id){const r=LVR.find(x=>x.id===id);if(r){r.status='rejected';svLV();rLeavePage();}}
+
+// ── LEAVE TAB IN HISTORY MODAL ──
+function loadLeaveTab(sid){
+  const s=S.find(x=>x.id===sid);if(!s)return;
+  const y=new Date().getFullYear();
+  const bal=getLeaveBal(s,y);
+  const recs=LVR.filter(r=>r.staffId===sid).sort((a,b)=>b.from.localeCompare(a.from));
+  const stCol={approved:'#16a34a',pending:'#f59e0b',rejected:'#e24b4a'};
+  const typeLabel={annual:'Annual',sick:'Sick',business:'Business',custom:'Other'};
+  let html='<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">Leave Balance '+y+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">'+
+    bal.map(b=>'<div style="background:'+(b.excess>0?'#fee2e2':'#f0fdf4')+';border-radius:9px;padding:9px 12px;text-align:center">'+
+      '<div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase">'+b.label+'</div>'+
+      '<div style="font-size:20px;font-weight:800;color:'+(b.excess>0?'#e24b4a':'#16a34a')+'">'+b.used+'/'+b.allowed+'</div>'+
+      '<div style="font-size:10px;color:#9ca3af">days used</div>'+
+    '</div>').join('')+
+    '</div></div>';
+  if(recs.length){
+    html+='<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">All Leave Records</div>'+
+    recs.map(r=>'<div style="border:1px solid #f0f0f0;border-radius:9px;padding:9px 12px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center">'+
+      '<div><div style="font-size:12px;font-weight:700">'+(typeLabel[r.type]||r.type)+(r.customName?' — '+r.customName:'')+'</div>'+
+      '<div style="font-size:11px;color:#9ca3af">'+r.from+(r.to&&r.to!==r.from?' → '+r.to:'')+' · '+r.days+'d'+(r.reason?' · '+r.reason:'')+'</div></div>'+
+      '<span style="font-size:11px;font-weight:700;color:'+stCol[r.status]+';background:'+stCol[r.status]+'1a;padding:2px 8px;border-radius:20px">'+r.status+'</span>'+
+    '</div>').join('');
+  }else html+='<div style="color:#9ca3af;font-size:12px;text-align:center;padding:16px">No leave records yet.</div>';
+  document.getElementById('hm-leave').innerHTML=html;
+}
+
+// ── LEAVE ALLOWANCE IN STAFF MODAL ──
+function addCustomLeaveRow(item){
+  const cont=q('s-lv-custom-rows');
+  const d=document.createElement('div');
+  d.style.cssText='display:flex;gap:7px;align-items:center;margin-bottom:6px';
+  d.innerHTML='<input type="text" value="'+(item?item.name:'')+'" placeholder="Leave name" class="lv-cn" style="flex:1;padding:5px 8px;border:1px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary)">'+
+    '<input type="number" value="'+(item?item.days:'')+'" placeholder="Days" class="lv-cd" min="0" step="0.5" style="width:70px;padding:5px 8px;border:1px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary)">'+
+    '<button type="button" style="background:none;border:none;cursor:pointer;font-size:16px;color:#9ca3af;padding:2px 5px">×</button>';
+  d.querySelector('button').addEventListener('click',()=>d.remove());
+  cont.appendChild(d);
+}
+
+function getCustomLeaveRows(){
+  return[...q('s-lv-custom-rows').querySelectorAll('div')].map(d=>({
+    name:d.querySelector('.lv-cn').value.trim(),
+    days:parseFloat(d.querySelector('.lv-cd').value)||0
+  })).filter(x=>x.name);
+}
+
+q('btn-add-custom-leave').addEventListener('click',()=>addCustomLeaveRow(null));
+
+// Show/hide leave section based on contract type
+document.getElementById('s-ct').addEventListener('change',function(){
+  const sf=q('s-leave-section');
+  if(sf)sf.style.display=this.value==='permanent'?'block':'none';
+});
 
 function doLogin(){
   const email=document.getElementById('login-email').value.trim();
