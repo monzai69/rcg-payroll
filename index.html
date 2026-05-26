@@ -718,6 +718,7 @@ window.cloudLoad=async()=>{
     <div class="fr"><label>Contract & Tax</label>
       <select id="s-ct">
         <option value="permanent">Permanent — ภงด.1 (SSO + tax)</option>
+        <option value="permanent_wht">Permanent (WHT) — WHT only, with leave</option>
         <option value="contract">Annual Contract — WHT 3% only</option>
         <option value="freelance">Freelance — WHT 3% only</option>
       </select>
@@ -1062,7 +1063,7 @@ function rStaff(){
   f.forEach(s=>{
     const pills=(s.items||[]).slice(0,2).map(i=>'<span style="background:#f3f4f6;color:#6b7280;border-radius:20px;padding:1px 7px;font-size:10px;margin:1px;display:inline-block">'+i.name+'</span>').join('');
     const ri=s.emptype==='fulltime'?(s.base?fmt(s.base)+' ฿/mo':'—'):s.emptype==='fullparttime'?(s.fptmethod==='daily'?fmt(s.fptdayrate)+' ฿/day':fmt(s.hrrate)+' ฿/hr'):s.pttype==='doctor'?fmt(s.hrrate)+' ฿/hr+DF':fmt(s.dayrate)+' ฿/day';
-    const tx=s.ct==='permanent'?'<span class="badge bperm">ภงด.1</span>':'<span class="badge bcont">WHT</span>';
+    const tx=s.ct==='permanent'?'<span class="badge bperm">ภงด.1</span>':s.ct==='permanent_wht'?'<span class="badge" style="background:#dcfce7;color:#166534">WHT+Leave</span>':'<span class="badge bcont">WHT</span>';
     const tr=document.createElement('tr');
     tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td><span class="badge '+(s.st==='Active'?'ba':'bi')+'">'+s.st+'</span></td><td style="white-space:nowrap"></td>';
     const btn=document.createElement('button');
@@ -1090,9 +1091,13 @@ function syncS(){
   q('pt-doc').style.display=pt==='doctor'?'block':'none';
   const n=q('s-ct-note');
   if(ct==='permanent'){n.style.cssText='background:#eff6ff;color:#1e40af;border-color:#bfdbfe';n.textContent='ภงด.1: SSO from base × 5% + progressive income tax';}
-  // Show ssoStart field only for permanent
-  const sf=q('s-sso-start-row');
-  if(sf)sf.style.display=ct==='permanent'?'block':'none';
+  else if(ct==='permanent_wht'){n.style.cssText='background:#f0fdf4;color:#166534;border-color:#bbf7d0';n.textContent='Permanent (WHT): WHT '+(C.wht||3)+'%. No SSO. No income tax. Has leave entitlement.';}
+  // Show leave section for permanent and permanent_wht
+  const sf=q('s-leave-section');
+  if(sf)sf.style.display=(ct==='permanent'||ct==='permanent_wht')?'block':'none';
+  // SSO start row only for permanent (ภงด.1)
+  const sr=q('s-sso-start-row');
+  if(sr)sr.style.display=ct==='permanent'?'block':'none';
   // Populate year dropdown if empty
   const ysel=q('s-ssoStartY');
   if(ysel&&!ysel.querySelector('option[value="2024"]')){
@@ -1151,7 +1156,7 @@ try{
   q('s-lv-business')&&(q('s-lv-business').value=lv.business!==undefined?lv.business:3);
   q('s-lv-custom-rows')&&(q('s-lv-custom-rows').innerHTML='');
   (lv.custom||[]).forEach(c=>addCustomLeaveRow(c));
-  q('s-leave-section')&&(q('s-leave-section').style.display=s.ct==='permanent'?'block':'none');
+  q('s-leave-section')&&(q('s-leave-section').style.display=(s.ct==='permanent'||s.ct==='permanent_wht')?'block':'none');
   popDeptDl();popBrDl();syncS();openM('sm');
 }catch(err){console.error('openEdit error:',err);alert('Edit error: '+err.message);}
 }
@@ -1302,6 +1307,7 @@ function saveStaff(){
   const prevStaff=_eSid?S.find(x=>x.id===_eSid):null;
   const wasNotPerm=prevStaff&&prevStaff.ct!=='permanent';
   const isNowPerm=newCt==='permanent';
+  const hasLeave=newCt==='permanent'||newCt==='permanent_wht';
   // Auto-record ssoStart when switching to permanent for first time
   let ssoStartM=parseInt(qv('s-ssoStartM'))||null;
   let ssoStartY=parseInt(qv('s-ssoStartY'))||null;
@@ -1316,7 +1322,7 @@ function saveStaff(){
   if(ssoStartM===1)ssoStartM=null,ssoStartY=null;
   const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:newCt,st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0,
     ssoStartM,ssoStartY,
-    leaveAllowance:newCt==='permanent'?{annual:parseFloat(qv('s-lv-annual'))||6,sick:parseFloat(qv('s-lv-sick'))||30,business:parseFloat(qv('s-lv-business'))||3,custom:getCustomLeaveRows()}:null,
+    leaveAllowance:hasLeave?{annual:parseFloat(qv('s-lv-annual'))||6,sick:parseFloat(qv('s-lv-sick'))||30,business:parseFloat(qv('s-lv-business'))||3,custom:getCustomLeaveRows()}:null,
     incentive6m:q('s-has6m').checked?{enabled:true,label:qv('s-6mlabel').trim()||'6M Incentive',tiers:get6mTiers()}:{enabled:false}};
   if(_eSid){
     const i=S.findIndex(x=>x.id===_eSid);
@@ -2287,7 +2293,7 @@ function initLeaveSelectors(){
     [ny-1,ny,ny+1].forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y;if(y===ny)o.selected=true;ysel.appendChild(o);});
   }
   const ssel=q('lv-f-s');
-  if(ssel){ssel.innerHTML='<option value="">All Staff</option>'+S.filter(s=>s.ct==='permanent'&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');}
+  if(ssel){ssel.innerHTML='<option value="">All Staff</option>'+S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht')&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');}
   [q('lv-f-s'),q('lv-f-type'),q('lv-f-y')].forEach(el=>{if(el)el.onchange=rLeavePage;});
   document.querySelectorAll('.lvsort').forEach(th=>{
     th.addEventListener('click',function(){
@@ -2333,7 +2339,7 @@ function rLeavePending(){
 }
 
 function rLeaveBalanceTable(y){
-  const permStaff=S.filter(s=>s.ct==='permanent'&&s.st==='Active');
+  const permStaff=S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht')&&s.st==='Active');
   const customNames=[];
   permStaff.forEach(s=>{(getLeaveAllowance(s).custom||[]).forEach(c=>{if(!customNames.includes(c.name))customNames.push(c.name);});});
   let rows=permStaff.map(s=>{
@@ -2357,7 +2363,7 @@ function rLeaveBalanceTable(y){
   const cell=(used,allowed)=>{
     const exceeded=used>allowed;
     return'<td style="padding:9px 14px;text-align:center;font-weight:600;'+(exceeded?'color:#e24b4a;background:#fff1f1;':'color:'+(used>0?'#374151':'#9ca3af')+';')+'">'+
-      used+'/'+allowed+'d'+
+      (used>0||exceeded?used+'/'+allowed+'d':'<span style="color:#e5e7eb">\u2014</span>')+
     '</td>';
   };
   document.querySelectorAll('.lvsort-custom').forEach(el=>el.remove());
@@ -2386,7 +2392,7 @@ function rLeaveDoneList(y){
   const sf=qv('lv-f-s'),tf=qv('lv-f-type');
   const done=LVR.filter(r=>{
     const s=S.find(x=>x.id===r.staffId);
-    return(r.status==='approved'||r.status==='rejected')&&r.year===y&&(!sf||r.staffId===sf)&&(!tf||r.type===tf)&&s&&s.ct==='permanent';
+    return(r.status==='approved'||r.status==='rejected')&&r.year===y&&(!sf||r.staffId===sf)&&(!tf||r.type===tf)&&s&&(s.ct==='permanent'||s.ct==='permanent_wht');
   }).sort((a,b)=>b.from.localeCompare(a.from));
   const list=q('lv-done-list');
   if(!done.length){list.innerHTML='<div class="card"><div class="no-data">No approved/rejected records for '+y+'</div></div>';return;}
@@ -2418,7 +2424,7 @@ function openAddLeave(){
   _eLvId=null;_lvCertData=null;
   q('lvm-title').textContent='Add Leave Record';
   q('btn-del-leave').style.display='none';
-  q('lv-s').innerHTML='<option value="">-- Select --</option>'+S.filter(s=>s.ct==='permanent'&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');
+  q('lv-s').innerHTML='<option value="">-- Select --</option>'+S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht')&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');
   q('lv-type').value='annual';q('lv-from').value='';q('lv-to').value='';
   q('lv-days').value='';q('lv-half').value='full';q('lv-reason').value='';
   q('lv-status').value='approved';q('lv-custom-row').style.display='none';
