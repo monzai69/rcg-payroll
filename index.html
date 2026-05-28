@@ -295,7 +295,13 @@ window.cloudLoad=async()=>{
 </div>
 
 <div class="pg" id="pg-staff">
-  <div class="ph fx jb ic"><div><h1>Staff</h1></div><button class="btn bp" id="btn-add-staff"><i class="ti ti-plus"></i>Add Staff</button></div>
+  <div class="ph fx jb ic">
+    <div><h1>Staff</h1></div>
+    <div class="fx g8 ic">
+      <button id="btn-show-inactive" onclick="toggleInactive()" style="display:none;background:#f3f4f6;color:#6b7280;border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer"></button>
+      <button class="btn bp" id="btn-add-staff"><i class="ti ti-plus"></i>Add Staff</button>
+    </div>
+  </div>
   <div class="card" style="margin-bottom:13px">
     <div class="fx g8 ic" style="flex-wrap:wrap">
       <input type="text" placeholder="Search..." id="ss" style="max-width:200px">
@@ -723,7 +729,7 @@ window.cloudLoad=async()=>{
         <option value="freelance">Freelance — WHT 3% only</option>
       </select>
     </div>
-    <div class="fr"><label>Status</label><select id="s-st"><option>Active</option><option>InActive</option></select></div>
+    <div class="fr"><label>Status</label><select id="s-st"><option>Active</option><option>InActive</option><option>Resigned</option></select></div>
   </div>
   <div id="s-ct-note" style="font-size:12px;border-radius:8px;padding:8px 11px;margin-bottom:10px;border:1px solid"></div>
   <div id="s-sso-start-row" style="display:none;margin-bottom:10px;background:#fefce8;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px">
@@ -1055,22 +1061,44 @@ function rDash(){
 q('dash-pm').addEventListener('change',rDash);q('dash-py').addEventListener('change',rDash);q('dash-rev-dept').addEventListener('change',rDash);
 
 function rDeptF(){q('sd').innerHTML='<option value="">All Departments</option>';(C.depts||[]).forEach(d=>{const nm=typeof d==='object'?d.name:d;const o=document.createElement('option');o.value=nm;o.textContent=nm;q('sd').appendChild(o)});q('sbr').innerHTML='<option value="">All Branches</option>';B.forEach(b=>{const o=document.createElement('option');o.value=b.id;o.textContent=b.name;q('sbr').appendChild(o)});}
+let _showInactive=false;
+function toggleInactive(){_showInactive=!_showInactive;rStaff();}
+
 function rStaff(){
   const sq=qv('ss').toLowerCase(),df=qv('sd'),bf=qv('sbr'),tf=qv('stype');
-  const f=S.filter(s=>{const nm=(s.nn+s.fn+s.ln).toLowerCase();return(!sq||nm.includes(sq))&&(!df||s.dept===df)&&(!bf||s.br===bf)&&(!tf||s.emptype===tf);});
+  let f=S.filter(s=>{const nm=(s.nn+s.fn+s.ln).toLowerCase();return(!sq||nm.includes(sq))&&(!df||s.dept===df)&&(!bf||s.br===bf)&&(!tf||s.emptype===tf);});
+  // Separate active from inactive/resigned
+  const active=f.filter(s=>s.st==='Active');
+  const hidden=f.filter(s=>s.st!=='Active');
+  // Update toggle button
+  const tbtn=q('btn-show-inactive');
+  if(tbtn){
+    if(hidden.length>0){
+      tbtn.style.display='inline-flex';
+      tbtn.innerHTML=(_showInactive?'<i class="ti ti-eye-off" style="font-size:13px;margin-right:5px"></i>Hide':'<i class="ti ti-eye" style="font-size:13px;margin-right:5px"></i>Show')+' inactive/resigned ('+hidden.length+')';
+      tbtn.style.background=_showInactive?'#fef3c7':'#f3f4f6';
+      tbtn.style.color=_showInactive?'#92400e':'#6b7280';
+      tbtn.style.borderColor=_showInactive?'#fcd34d':'#e5e7eb';
+    } else {
+      tbtn.style.display='none';
+    }
+  }
   const tb=q('stbody');tb.innerHTML='';
-  if(!f.length){tb.innerHTML='<tr><td colspan="8" class="no-data">No staff found</td></tr>';return}
-  f.forEach(s=>{
+  const toShow=_showInactive?[...active,...hidden]:active;
+  if(!toShow.length){tb.innerHTML='<tr><td colspan="8" class="no-data">No staff found</td></tr>';return;}
+  toShow.forEach(s=>{
+    const isHidden=s.st!=='Active';
     const pills=(s.items||[]).slice(0,2).map(i=>'<span style="background:#f3f4f6;color:#6b7280;border-radius:20px;padding:1px 7px;font-size:10px;margin:1px;display:inline-block">'+i.name+'</span>').join('');
     const ri=s.emptype==='fulltime'?(s.base?fmt(s.base)+' ฿/mo':'—'):s.emptype==='fullparttime'?(s.fptmethod==='daily'?fmt(s.fptdayrate)+' ฿/day':fmt(s.hrrate)+' ฿/hr'):s.pttype==='doctor'?fmt(s.hrrate)+' ฿/hr+DF':fmt(s.dayrate)+' ฿/day';
     const tx=s.ct==='permanent'?'<span class="badge bperm">ภงด.1</span>':s.ct==='permanent_wht'?'<span class="badge" style="background:#dcfce7;color:#166534">WHT+Leave</span>':'<span class="badge bcont">WHT</span>';
+    const stBadge=s.st==='Active'?'<span class="badge ba">Active</span>':s.st==='Resigned'?'<span class="badge" style="background:#fee2e2;color:#991b1b">Resigned</span>':'<span class="badge bi">InActive</span>';
     const tr=document.createElement('tr');
-    tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td><span class="badge '+(s.st==='Active'?'ba':'bi')+'">'+s.st+'</span></td><td style="white-space:nowrap"></td>';
+    if(isHidden)tr.style.cssText='opacity:.5;background:#fafafa;';
+    tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td>'+stBadge+'</td><td style="white-space:nowrap"></td>';
     const btn=document.createElement('button');
     btn.className='btn bo bsm';btn.innerHTML='<i class="ti ti-edit"></i>';
     btn.addEventListener('click',function(){openEdit(s.id);});
     tr.querySelector('td:last-child').appendChild(btn);
-    // History button
     const hbtn=document.createElement('button');
     hbtn.className='btn bo bsm';hbtn.style.marginLeft='4px';hbtn.innerHTML='<i class="ti ti-history"></i>';
     hbtn.addEventListener('click',function(){openHistory(s.id);});
