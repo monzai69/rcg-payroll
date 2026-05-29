@@ -324,7 +324,7 @@ window.cloudLoad=async()=>{
       <div style="flex:1"></div>
       <button class="btn bok bsm" id="btn-saveall"><i class="ti ti-device-floppy"></i>Save All</button>
       <button class="btn bgd bsm" id="btn-export"><i class="ti ti-table-export"></i>Export CSV</button>
-      <label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;font-size:12px;cursor:pointer;font-family:'Sarabun',sans-serif;font-weight:600;background:#7c3aed;color:#fff" title="Import ค่ามือ & Revenue from LIV clinic CSV"><i class="ti ti-file-import" style="font-size:13px"></i>Import ค่ามือ CSV<input type="file" id="csv-import-input" accept=".csv,.xlsx" style="display:none"></label>
+      <label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;font-size:12px;cursor:pointer;font-family:'Sarabun',sans-serif;font-weight:600;background:#7c3aed;color:#fff;vertical-align:middle;line-height:1" title="Import ค่ามือ & Revenue from LIV clinic CSV"><i class="ti ti-file-import" style="font-size:13px"></i>Import ค่ามือ CSV<input type="file" id="csv-import-input" accept=".csv,.xlsx" style="display:none"></label>
       <span id="sync-status" style="display:none;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:#f0fdf4"></span>
     </div>
   </div>
@@ -1089,7 +1089,47 @@ function rDash(){
   const rd=qv('dash-rev-dept');q('ch-rev').innerHTML=bars([...all].filter(d=>!rd||d.s.dept===rd).sort((a,b)=>b.rev-a.rev).filter(d=>d.rev>0).slice(0,7).map(d=>({s:d.s,v:d.rev})),'#059669');
   q('ch-kam').innerHTML=bars([...all].sort((a,b)=>b.kT-a.kT).filter(d=>d.kT>0).slice(0,7).map(d=>({s:d.s,v:d.kT})),'var(--gd)');
   q('dash-sl').innerHTML=act.map(s=>'<div class="fx ic g8" style="padding:6px 0;border-bottom:1px solid #f9fafb"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div style="flex:1"><div style="font-size:13px;font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.dept+' · '+brN(s.br)+'</div></div>'+empBadge(s)+'</div>').join('');
-  q('dash-ps').innerHTML=entries.length?entries.map(e=>{const s=S.find(x=>x.id===e.sid);if(!s)return'';const c=calcM(s,e,key);return'<div class="fx jb ic" style="padding:6px 0;border-bottom:1px solid #f9fafb;font-size:13px"><span>'+s.nn+' '+s.fn+'</span><span style="font-weight:700">'+fmt(c.net)+' ฿</span></div>';}).join(''):'<div class="no-data">No payroll data yet</div>';
+  // Branch-grouped payroll summary
+  const act2=S.filter(x=>x.st==='Active'&&x.emptype!=='parttime');
+  // Get unique branches that have active staff
+  const branchIds=[...new Set(act2.map(s=>s.br))].filter(Boolean);
+  // Add staff with no branch at end
+  const noBranch=act2.filter(s=>!s.br||!B.find(b=>b.id===s.br));
+  let psHtml='';
+  let grandTotal=0;
+  branchIds.forEach(bid=>{
+    const br=B.find(b=>b.id===bid);
+    const brStaff=act2.filter(s=>s.br===bid);
+    if(!brStaff.length)return;
+    let brTotal=0;
+    let staffRows='';
+    brStaff.forEach(s=>{
+      const e2=P[key]&&P[key][s.id]||{};
+      const c2=calcM(s,e2,key);
+      brTotal+=c2.net;
+      staffRows+='<div class="fx jb ic" style="padding:4px 0;font-size:12px"><span style="color:#6b7280">'+s.nn+' '+s.fn+'</span><span style="font-weight:600;color:'+(c2.net>0?'#1a1a2e':'#9ca3af')+'">'+fmt(c2.net)+' ฿</span></div>';
+    });
+    grandTotal+=brTotal;
+    psHtml+='<div style="margin-bottom:12px">'+
+      '<div style="font-size:11px;font-weight:800;color:var(--nv);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;padding-bottom:4px;border-bottom:1.5px solid #e5e7eb">🏥 '+(br?br.name:bid)+'</div>'+
+      staffRows+
+      '<div class="fx jb ic" style="padding:5px 0 2px;border-top:1px solid #e5e7eb;margin-top:4px"><span style="font-size:12px;font-weight:700;color:#374151">Total</span><span style="font-size:13px;font-weight:800;color:var(--nv)">'+fmt(brTotal)+' ฿</span></div>'+
+    '</div>';
+  });
+  // Staff with no matching branch
+  if(noBranch.length){
+    let nbTotal=0,nbRows='';
+    noBranch.forEach(s=>{
+      const e2=P[key]&&P[key][s.id]||{};
+      const c2=calcM(s,e2,key);
+      nbTotal+=c2.net;nbRows+='<div class="fx jb ic" style="padding:4px 0;font-size:12px"><span style="color:#6b7280">'+s.nn+' '+s.fn+'</span><span style="font-weight:600">'+fmt(c2.net)+' ฿</span></div>';
+    });
+    grandTotal+=nbTotal;
+    psHtml+='<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;padding-bottom:4px;border-bottom:1.5px solid #e5e7eb">🏥 Other</div>'+nbRows+'<div class="fx jb ic" style="padding:5px 0 2px;border-top:1px solid #e5e7eb;margin-top:4px"><span style="font-size:12px;font-weight:700">Total</span><span style="font-size:13px;font-weight:800;color:var(--nv)">'+fmt(nbTotal)+' ฿</span></div></div>';
+  }
+  // Grand total
+  psHtml+='<div style="background:var(--nv);border-radius:9px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span style="font-size:13px;font-weight:700;color:#fff">💰 Grand Total</span><span style="font-size:16px;font-weight:800;color:#fde68a">'+fmt(grandTotal)+' ฿</span></div>';
+  q('dash-ps').innerHTML=psHtml||'<div class="no-data">No payroll data yet</div>';
 }
 q('dash-pm').addEventListener('change',rDash);q('dash-py').addEventListener('change',rDash);q('dash-rev-dept').addEventListener('change',rDash);
 
@@ -1772,7 +1812,9 @@ function copyPaySummary(sid){
 
   // Build clean white card HTML
   const rows=[];
-  rows.push({label:'Base Salary',amt:fmt(c.bG),type:'income'});
+  const isFPT=s.emptype==='fullparttime';
+  const baseLabel=isFPT?c.bLabel:(s.emptype==='fulltime'?'Base Salary':'Pay');
+  rows.push({label:baseLabel,amt:fmt(c.bG),type:'income'});
   if(c.dL>0){
     rows.push({label:'Leave ('+fmt(c.leaveDays)+'d '+fmt(c.leaveHrs)+'hrs)',amt:'−'+fmt(c.dLbase),type:'ded'});
     if(c.dLitems>0)rows.push({label:'Leave − Fixed Items',amt:'−'+fmt(c.dLitems),type:'ded'});
