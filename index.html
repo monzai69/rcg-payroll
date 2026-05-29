@@ -1800,9 +1800,24 @@ function buildAcct(s,c){
   if(c.dO>0)h+='<div class="ar ded"><span class="lbl">Other</span><span class="amt">−'+fmt(c.dO)+' ฿</span></div>';
   h+='<div class="ar net"><span class="lbl">NET PAY</span><span class="amt">'+fmt(c.net)+' ฿</span></div></div>';
   if(s.ct==='permanent'&&c.aT>0)h+='<div style="font-size:10px;color:#9ca3af;text-align:right;margin-top:4px">Est. annual tax: '+fmt(c.aT)+' ฿</div>';
-  // Copy button
-  h+='<div style="text-align:right;margin-top:10px"><button onclick="copyPaySummary(\''+s.id+'\')" id="cpybtn-'+s.id+'" style="display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background=\'#dcfce7\'" onmouseout="this.style.background=\'#f0fdf4\'"><i class="ti ti-clipboard" style="font-size:14px"></i>Copy Summary</button></div>';
+  // Save & Copy button
+  h+='<div style="text-align:right;margin-top:10px"><button onclick="saveAndCopy(\''+s.id+'\')" id="cpybtn-'+s.id+'" style="display:inline-flex;align-items:center;gap:6px;background:#1e3a5f;color:#fff;border:1.5px solid #1e3a5f;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background=\'#1a3a5c\'" onmouseout="this.style.background=\'#1e3a5f\'"><i class="ti ti-device-floppy" style="font-size:14px"></i>Save & Copy</button></div>';
   return h;
+}
+
+function saveAndCopy(sid){
+  // Save this staff's data first
+  const key=mkKey(parseInt(qv('pm')),parseInt(qv('py')));
+  const s=S.find(x=>x.id===sid);if(!s)return;
+  if(!P[key])P[key]={};
+  const e=gatherE(sid);
+  if(P[key][sid]&&P[key][sid].diligence)e.diligence=P[key][sid].diligence;
+  if(P[key][sid]&&P[key][sid].snap)e.snap=P[key][sid].snap;
+  if(!e.snap){e.snap={base:s.base||0,hrrate:s.hrrate||0,fptdayrate:s.fptdayrate||0,otrate:s.otrate||0,ct:s.ct,emptype:s.emptype,fptmethod:s.fptmethod||'hourly',items:JSON.parse(JSON.stringify(s.items||[]))};}
+  const c=calcM(s,e,key);e.net=c.net;
+  P[key][sid]=e;svP();
+  // Then copy summary
+  copyPaySummary(sid);
 }
 
 function copyPaySummary(sid){
@@ -1810,7 +1825,7 @@ function copyPaySummary(sid){
   const key=mkKey(parseInt(qv('pm')),parseInt(qv('py')));
   const e=P[key]&&P[key][sid]||{};
   const c=calcM(s,e,key);
-  const period=qv('pm')+' '+qv('py');
+  const period=MTH[parseInt(qv('pm'))-1]+' '+qv('py');
   const btn=document.getElementById('cpybtn-'+sid);
 
   // Build clean white card HTML
@@ -1911,7 +1926,7 @@ function copyPaySummary(sid){
       if(navigator.clipboard&&navigator.clipboard.write){
         navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(()=>{
           if(btn){btn.innerHTML='<i class="ti ti-check" style="font-size:14px"></i> Copied!';btn.style.background='#dcfce7';btn.style.borderColor='#86efac';btn.disabled=false;}
-          setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-clipboard" style="font-size:14px"></i>Copy Summary';btn.style.background='#f0fdf4';btn.style.borderColor='#bbf7d0';}},2500);
+          setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-device-floppy" style="font-size:14px"></i>Save & Copy';btn.style.background='#1e3a5f';btn.style.borderColor='#1e3a5f';}},2500);
         }).catch(()=>showCopyFail(btn,canvas));
       } else {
         showCopyFail(btn,canvas);
@@ -1931,7 +1946,7 @@ function showCopyFail(btn,canvas){
   } else {
     if(btn){btn.innerHTML='<i class="ti ti-alert-triangle" style="font-size:14px"></i> Failed';btn.disabled=false;}
   }
-  setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-clipboard" style="font-size:14px"></i>Copy Summary';btn.style.background='#f0fdf4';btn.style.borderColor='#bbf7d0';}},2500);
+  setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-device-floppy" style="font-size:14px"></i>Save & Copy';btn.style.background='#1e3a5f';btn.style.borderColor='#1e3a5f';}},2500);
 }
 function build6mBlock(s,key){
   const i6=s.incentive6m;
