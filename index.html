@@ -324,10 +324,7 @@ window.cloudLoad=async()=>{
       <div style="flex:1"></div>
       <button class="btn bok bsm" id="btn-saveall"><i class="ti ti-device-floppy"></i>Save All</button>
       <button class="btn bgd bsm" id="btn-export"><i class="ti ti-table-export"></i>Export CSV</button>
-      <label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;font-size:12px;cursor:pointer;font-family:'Sarabun',sans-serif;font-weight:600;border:none;background:#7c3aed;color:#fff" title="Import ค่ามือ & Revenue from LIV clinic CSV">
-        <i class="ti ti-file-import" style="font-size:13px"></i>Import ค่ามือ CSV
-        <input type="file" id="csv-import-input" accept=".csv" style="display:none">
-      </label>
+      <label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;font-size:12px;cursor:pointer;font-family:'Sarabun',sans-serif;font-weight:600;background:#7c3aed;color:#fff" title="Import ค่ามือ & Revenue from LIV clinic CSV"><i class="ti ti-file-import" style="font-size:13px"></i>Import ค่ามือ CSV<input type="file" id="csv-import-input" accept=".csv,.xlsx" style="display:none"></label>
       <span id="sync-status" style="display:none;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:#f0fdf4"></span>
     </div>
   </div>
@@ -869,8 +866,16 @@ window.cloudLoad=async()=>{
 <div class="modal-box" style="width:420px">
   <div style="font-size:16px;font-weight:700;margin-bottom:15px;color:var(--nv)">Record Advance</div>
   <div class="fr"><label>Staff</label><select id="a-s"></select></div>
-  <div class="g2"><div class="fr"><label>Amount (฿)</label><input id="a-amt" type="number"></div><div class="fr"><label>Date</label><input id="a-date" type="date"></div></div>
+  <div class="g2"><div class="fr"><label>Amount (฿)</label><input id="a-amt" type="number" oninput="syncAdvModal()"></div><div class="fr"><label>Date</label><input id="a-date" type="date"></div></div>
   <div class="fr"><label>Deduct in Period</label><div class="fx g8"><select id="a-dm" style="flex:1"></select><select id="a-dy" style="flex:1"></select></div></div>
+  <div class="fr" style="margin-bottom:6px"><label>Deduction Type</label>
+    <div class="fx g8 ic">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="a-dtype" value="full" id="a-dtype-full" checked onchange="syncAdvModal()" style="accent-color:var(--nv)"> Full</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="a-dtype" value="installment" id="a-dtype-inst" onchange="syncAdvModal()" style="accent-color:var(--nv)"> Installment</label>
+    </div>
+  </div>
+  <div id="a-inst-row" style="display:none" class="fr"><label>Monthly Installment (฿)</label><input id="a-inst" type="number" placeholder="e.g. 3000" oninput="syncAdvModal()"></div>
+  <div id="a-inst-preview" style="display:none;background:#fef3c7;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#92400e"></div>
   <div class="fr"><label>Note</label><input id="a-note" type="text"></div>
   <div class="fx g8 jb mt16">
     <button class="btn bx bsm" id="btn-del-adv" style="display:none"><i class="ti ti-trash"></i>Delete</button>
@@ -983,7 +988,10 @@ function calcM(s,e,key){
     else{rows.push({name:item.name,net:gross,isWHT:false,isDiligence:!!item.isDiligence});gI+=gross;if(isK)kT+=gross;}
   });
   const gross=effBase+(gI-dLitems)+otA+bon;
-  const adv=key?A.filter(a=>a.staffId===s.id&&a.key===key&&a.status==='pending').reduce((t,a)=>t+(parseFloat(a.amt)||0),0):0;
+  const advP=key?A.filter(a=>a.staffId===s.id&&a.key===key&&a.status==='pending'):[];
+  const adv=key?advP.reduce((t,a)=>{if(a.installment>0)return t+Math.min(a.installment,a.remaining||a.amt);return t+(parseFloat(a.amt)||0);},0):0;
+  const advRemaining=advP.reduce((t,a)=>t+(parseFloat(a.remaining||a.amt)||0),0);
+  const advIsInst=advP.some(a=>a.installment>0);
   if(isPerm){
     const ssoBase=Math.min(effBase,parseFloat(C.ssoC)||17500),sso=ssoBase*((parseFloat(C.sso)||5)/100);
     // Determine R (remaining months multiplier)
@@ -1012,10 +1020,10 @@ function calcM(s,e,key){
       const taxC=aT_B-aT; // bonus-only tax
       mT=mTbase+taxC;
     }
-    return{bG,bLabel,otA,otH,bon,gI,rows,sso,mT,aT,R,dL,dO,adv,gross,net:gross-sso-mT-dO-adv,isPerm,whtD:0,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase,dLbase,dLitems};
+    return{bG,bLabel,otA,otH,bon,gI,rows,sso,mT,aT,R,dL,dO,adv,advRemaining,advIsInst,gross,net:gross-sso-mT-dO-adv,isPerm,whtD:0,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase,dLbase,dLitems};
   }else{
     const whtD=gross*whtR;
-    return{bG,bLabel,otA,otH,bon,gI,rows,sso:0,mT:0,aT:0,dL,dO,adv,gross,net:gross-whtD-dO-adv,isPerm,whtD,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase,dLbase,dLitems};
+    return{bG,bLabel,otA,otH,bon,gI,rows,sso:0,mT:0,aT:0,dL,dO,adv,advRemaining,advIsInst,gross,net:gross-whtD-dO-adv,isPerm,whtD,rev,kT,dailyRate,hourlyRate,leaveDays,leaveHrs,effBase,dLbase,dLitems};
   }
 }
 
@@ -1696,6 +1704,13 @@ function buildCard(s,e,key){
   const perIt=(s.items||[]).filter(i=>i.type==='periodic');
   const dilIt=(s.items||[]).filter(i=>i.isDiligence);
   const advP=A.filter(a=>a.staffId===s.id&&a.key===key&&a.status==='pending');
+  const isResigned=s.st==='Resigned';
+  let advBanner='';
+  if(advP.length){
+    if(isResigned){advBanner='<div style="background:#fee2e2;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#991b1b;border:1px solid #fca5a5"><div style="font-weight:700;margin-bottom:4px">⚠️ Resigned Staff — Advance Balance</div><div>Total remaining: <b>'+fmt(c.advRemaining)+' ฿</b> — Consider deducting full balance this month.</div></div>';}
+    else if(c.advIsInst){const afterDeduct=c.advRemaining-c.adv;advBanner='<div style="background:#fef3c7;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#92400e;border:1px solid #fcd34d"><div style="font-weight:700">💳 Advance Installment</div><div style="margin-top:2px">Remaining: <b>'+fmt(c.advRemaining)+' ฿</b> → Deducting: <b>'+fmt(c.adv)+' ฿</b> this month</div><div style="margin-top:2px;color:#b45309">After deduction: '+fmt(Math.max(0,afterDeduct))+' ฿ remaining</div></div>';}
+    else{advBanner='<div style="background:#fef3c7;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px;border:1px solid #fcd34d"><i class="ti ti-credit-card"></i>Advance pending: <b>'+fmt(c.adv)+' ฿</b></div>';}
+  }
   const done=isDone(s,e);
   const tx=s.ct==='permanent'?'<span class="badge bperm">ภงด.1</span>':'<span class="badge bcont">WHT</span>';
   let inc='<div class="income-grid">';
@@ -1719,7 +1734,7 @@ function buildCard(s,e,key){
     '<div class="fbox ded" style="grid-column:span 2"><label>📋 Leave Deduction (auto-calculated) <span style="color:#e24b4a;font-weight:600" id="leave-preview-'+s.id+'">'+(c.dL>0?'− '+fmt(c.dL)+' ฿ ('+fmt(c.dailyRate)+' ฿/day · '+fmt(c.hourlyRate)+' ฿/hr)':'Enter days/hours above')+'</span></label></div>'+
     '<div class="fbox ded"><label>➖ Other Deductions (กยศ.)</label><input type="number" id="pr-doth-'+s.id+'" value="'+(e.dOth||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>'+
     '</div>';
-  return'<div class="spc'+(done?' done':'')+'" id="spc-'+s.id+'"><div class="spc-head"><div class="av" style="width:36px;height:36px;font-size:14px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+s.nn+' '+s.fn+(done?' <i class="ti ti-circle-check" style="color:var(--ok);font-size:17px"></i>':'')+'</div><div class="ts tm">'+s.dept+' · '+brN(s.br)+'</div></div><div style="text-align:right;margin-right:8px"><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase">Net Pay</div><div style="font-size:20px;font-weight:800;color:var(--nv)" id="snet-'+s.id+'">'+fmt(c.net)+' ฿</div></div>'+empBadge(s)+' '+tx+'</div><div class="spc-body">'+(advP.length?'<div style="background:#fef3c7;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px;border:1px solid #fcd34d"><i class="ti ti-credit-card"></i>Advance pending: <b>'+fmt(c.adv)+' ฿</b></div>':'')+'<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px"><i class="ti ti-plus" style="font-size:12px"></i> Income</div>'+inc+(dilIt.length?'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-toggle-right" style="font-size:12px"></i> เบี้ยขยัน</div>'+dil:'')+'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-minus" style="font-size:12px"></i> Deductions</div>'+ded+'<div id="acct-'+s.id+'">'+buildAcct(s,c)+'</div>'+build6mBlock(s,key)+'</div></div>';
+  return'<div class="spc'+(done?' done':'')+'" id="spc-'+s.id+'"><div class="spc-head"><div class="av" style="width:36px;height:36px;font-size:14px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+s.nn+' '+s.fn+(done?' <i class="ti ti-circle-check" style="color:var(--ok);font-size:17px"></i>':'')+'</div><div class="ts tm">'+s.dept+' · '+brN(s.br)+'</div></div><div style="text-align:right;margin-right:8px"><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase">Net Pay</div><div style="font-size:20px;font-weight:800;color:var(--nv)" id="snet-'+s.id+'">'+fmt(c.net)+' ฿</div></div>'+empBadge(s)+' '+tx+'</div><div class="spc-body">'+advBanner+'<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px"><i class="ti ti-plus" style="font-size:12px"></i> Income</div>'+inc+(dilIt.length?'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-toggle-right" style="font-size:12px"></i> เบี้ยขยัน</div>'+dil:'')+'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-minus" style="font-size:12px"></i> Deductions</div>'+ded+'<div id="acct-'+s.id+'">'+buildAcct(s,c)+'</div>'+build6mBlock(s,key)+'</div></div>';
 }
 function buildAcct(s,c){
   let h='<div class="acct"><div class="ar sh">Income</div>';
@@ -1735,7 +1750,10 @@ function buildAcct(s,c){
   h+='<div class="ar sub"><span class="lbl">Gross Income</span><span class="amt">'+fmt(c.gross)+' ฿</span></div><div class="ar sh">Deductions</div>';
   if(s.ct==='permanent'){h+='<div class="ar ded"><span class="lbl">SSO (5% × '+fmt(c.effBase||c.bG)+' ฿)</span><span class="amt">−'+fmt(c.sso)+' ฿</span></div>';if(c.mT>0)h+='<div class="ar ded"><span class="lbl">Income Tax ภงด.1</span><span class="amt">−'+fmt(c.mT)+' ฿</span></div>';}
   else h+='<div class="ar ded"><span class="lbl">WHT '+(C.wht||3)+'%</span><span class="amt">−'+fmt(c.whtD)+' ฿</span></div>';
-  if(c.adv>0)h+='<div class="ar ded"><span class="lbl">Advance</span><span class="amt">−'+fmt(c.adv)+' ฿</span></div>';
+  if(c.adv>0){
+    h+='<div class="ar ded"><span class="lbl">Advance'+(c.advIsInst?' (installment)':'')+'</span><span class="amt">−'+fmt(c.adv)+' ฿</span></div>';
+    if(c.advIsInst&&c.advRemaining>0){const afterDeduct=c.advRemaining-c.adv;h+='<div class="ar" style="font-size:11px;background:#fef3c7"><span class="lbl" style="color:#92400e">Remaining after deduction</span><span class="amt" style="color:#92400e;font-weight:700">'+fmt(Math.max(0,afterDeduct))+' ฿</span></div>';}
+  }
   if(c.dO>0)h+='<div class="ar ded"><span class="lbl">Other</span><span class="amt">−'+fmt(c.dO)+' ฿</span></div>';
   h+='<div class="ar net"><span class="lbl">NET PAY</span><span class="amt">'+fmt(c.net)+' ฿</span></div></div>';
   if(s.ct==='permanent'&&c.aT>0)h+='<div style="font-size:10px;color:#9ca3af;text-align:right;margin-top:4px">Est. annual tax: '+fmt(c.aT)+' ฿</div>';
@@ -1769,7 +1787,10 @@ function copyPaySummary(sid){
   } else {
     rows.push({label:'WHT '+(C.wht||3)+'%',amt:'−'+fmt(c.whtD),type:'ded'});
   }
-  if(c.adv>0)rows.push({label:'Advance',amt:'−'+fmt(c.adv),type:'ded'});
+  if(c.adv>0){
+    rows.push({label:'Advance'+(c.advIsInst?' (installment)':''),amt:'−'+fmt(c.adv),type:'ded'});
+    if(c.advIsInst&&c.advRemaining>0){const afterDeduct=Math.max(0,c.advRemaining-c.adv);rows.push({label:'↳ Remaining balance',amt:fmt(afterDeduct),type:'info'});}
+  }
   if(c.dO>0)rows.push({label:'Other Deductions',amt:'−'+fmt(c.dO),type:'ded'});
 
   const incRows=rows.filter(r=>r.type==='income');
@@ -1777,13 +1798,13 @@ function copyPaySummary(sid){
   const dedRows=rows.filter(r=>r.type==='ded');
 
   const renderRow=r=>{
-    const isDed=r.type==='ded';
-    const isSub=r.type==='sub';
+    const isDed=r.type==='ded',isSub=r.type==='sub',isInfo=r.type==='info';
     return`<tr style="border-bottom:1px solid #f3f4f6">
-      <td style="padding:7px 12px;font-size:14px;color:${isDed?'#9ca3af':isSub?'#1e3a5f':'#1a1a2e'};font-weight:${isSub?'700':'400'}">${r.label}</td>
-      <td style="padding:7px 12px;text-align:right;font-size:14px;color:${isDed?'#e24b4a':isSub?'#1e3a5f':'#1a1a2e'};font-weight:${isSub?'700':'500'}">${r.amt} ฿</td>
+      <td style="padding:${isInfo?'3px 12px 7px 24px':'7px 12px'};font-size:${isInfo?'12px':'14px'};color:${isDed?'#9ca3af':isSub?'#1e3a5f':isInfo?'#b45309':'#1a1a2e'};font-weight:${isSub?'700':'400'};font-style:${isInfo?'italic':''}">${r.label}</td>
+      <td style="padding:${isInfo?'3px 12px 7px':'7px 12px'};text-align:right;font-size:${isInfo?'12px':'14px'};color:${isDed?'#e24b4a':isSub?'#1e3a5f':isInfo?'#92400e':'#1a1a2e'};font-weight:${isSub?'700':isInfo?'600':'500'}">${r.amt} ฿</td>
     </tr>`;
   };
+
 
   // Build revenue info block — show raw revenue inputs (only if staff has revenue-based items)
   const hasRevItems=(s.items||[]).some(i=>['comm_flat','comm_tiered','comm_tiered_fixed'].includes(i.type));
@@ -2024,6 +2045,7 @@ function saveAll(){
       items:JSON.parse(JSON.stringify(s.items||[]))
     };
     const c=calcM(s,e,key);e.net=c.net;P[key][s.id]=e;
+    if(c.adv>0){A.forEach(a=>{if(a.staffId===s.id&&a.key===key&&a.status==='pending'&&a.installment>0){const deducted=Math.min(a.installment,a.remaining||a.amt);a.remaining=Math.max(0,(a.remaining||a.amt)-deducted);if(a.remaining<=0)a.status='deducted';}});svA();}
   });
   svP();alert('Saved ✓ — salaries locked for this period.');
 }
@@ -2187,13 +2209,21 @@ function apCopyFallback(btn,canvas){
 }
 
 function rAdvSels(){q('af-s').innerHTML='<option value="">All Staff</option>';S.filter(s=>s.st==='Active').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn;q('af-s').appendChild(o)});const keys=[...new Set(A.map(a=>a.key))].filter(Boolean).sort().reverse();q('af-m').innerHTML='<option value="">All Periods</option>';keys.forEach(k=>{const[ky,km]=k.split('_');const o=document.createElement('option');o.value=k;o.textContent=MTH[parseInt(km)-1]+' '+ky;q('af-m').appendChild(o)});}
-function rAdv(){const sf=qv('af-s'),mf=qv('af-m'),stf=qv('af-st');let f=A.filter(a=>(!sf||a.staffId===sf)&&(!mf||a.key===mf)&&(!stf||a.status===stf));f.sort((a,b)=>b.date.localeCompare(a.date));const cont=q('adv-list');cont.innerHTML='';if(!f.length){cont.innerHTML='<div class="card"><div class="no-data">No records</div></div>';return}f.forEach(a=>{const s=S.find(x=>x.id===a.staffId);const[ky,km]=a.key.split('_');const d=document.createElement('div');d.className='adv-card';d.innerHTML='<div class="av" style="width:30px;height:30px;font-size:11px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div><div style="flex:1"><div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+'</div><div class="ts tm">'+(a.note||'-')+' · '+MTH[parseInt(km)-1]+' '+ky+'</div></div><div style="font-size:17px;font-weight:800;color:#92400e">'+fmt(a.amt)+' ฿</div><span class="'+(a.status==='pending'?'atag':'adone')+'">'+(a.status==='pending'?'Pending':'Deducted')+'</span>';const eb=document.createElement('button');eb.className='btn bo bsm';eb.innerHTML='<i class="ti ti-edit"></i>';eb.addEventListener('click',()=>openEditAdv(a.id));d.appendChild(eb);if(a.status==='pending'){const mb=document.createElement('button');mb.className='btn bok bsm';mb.innerHTML='<i class="ti ti-check"></i>Done';mb.addEventListener('click',()=>markAdv(a.id));d.appendChild(mb);}cont.appendChild(d);});}
+function rAdv(){const sf=qv('af-s'),mf=qv('af-m'),stf=qv('af-st');let f=A.filter(a=>(!sf||a.staffId===sf)&&(!mf||a.key===mf)&&(!stf||a.status===stf));f.sort((a,b)=>b.date.localeCompare(a.date));const cont=q('adv-list');cont.innerHTML='';if(!f.length){cont.innerHTML='<div class="card"><div class="no-data">No records</div></div>';return}f.forEach(a=>{const s=S.find(x=>x.id===a.staffId);const[ky,km]=a.key.split('_');const d=document.createElement('div');d.className='adv-card';const remaining=a.remaining!==undefined?a.remaining:a.amt;const isInst=a.installment>0;d.innerHTML='<div class="av" style="width:30px;height:30px;font-size:11px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div><div style="flex:1"><div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+'</div><div class="ts tm">'+(a.note||'-')+' · '+MTH[parseInt(km)-1]+' '+ky+'</div>'+(isInst?'<div class="ts" style="color:#92400e">Installment: '+fmt(a.installment)+' ฿/mo · Remaining: <b>'+fmt(remaining)+' ฿</b></div>':'')+'</div><div style="text-align:right"><div style="font-size:17px;font-weight:800;color:#92400e">'+fmt(a.amt)+' ฿</div>'+(isInst&&remaining<a.amt?'<div style="font-size:11px;color:#9ca3af">'+fmt(remaining)+' left</div>':'')+'</div><span class="'+(a.status==='pending'?'atag':'adone')+'">'+(a.status==='pending'?'Pending':'Deducted')+'</span>';const eb=document.createElement('button');eb.className='btn bo bsm';eb.innerHTML='<i class="ti ti-edit"></i>';eb.addEventListener('click',()=>openEditAdv(a.id));d.appendChild(eb);if(a.status==='pending'){const mb=document.createElement('button');mb.className='btn bok bsm';mb.innerHTML='<i class="ti ti-check"></i>Done';mb.addEventListener('click',()=>markAdv(a.id));d.appendChild(mb);}cont.appendChild(d);});}
 ['af-s','af-m','af-st'].forEach(id=>q(id).addEventListener('change',rAdv));
 q('btn-add-adv').addEventListener('click',openAddAdv);q('btn-cancel-adv').addEventListener('click',()=>closeM('am'));q('btn-save-adv').addEventListener('click',saveAdv);
 q('btn-del-adv').addEventListener('click',()=>{if(!_eAid||!confirm('Delete?'))return;A=A.filter(a=>a.id!==_eAid);svA();closeM('am');rAdv();});
-function openAddAdv(){_eAid=null;q('btn-del-adv').style.display='none';['a-amt','a-note'].forEach(id=>q(id).value='');q('a-date').value=new Date().toISOString().split('T')[0];q('a-s').innerHTML='';S.filter(s=>s.st==='Active').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn;q('a-s').appendChild(o)});openM('am');}
-function openEditAdv(id){const a=A.find(x=>x.id===id);if(!a)return;openAddAdv();_eAid=id;q('btn-del-adv').style.display='inline-flex';q('a-s').value=a.staffId;q('a-amt').value=a.amt;q('a-note').value=a.note||'';q('a-date').value=a.date||'';const[ky,km]=a.key.split('_');q('a-dy').value=ky;q('a-dm').value=km;}
-function saveAdv(){const m=qv('a-dm'),y=qv('a-dy'),na={id:_eAid||Date.now().toString(),staffId:qv('a-s'),amt:parseFloat(qv('a-amt'))||0,note:qv('a-note').trim(),date:qv('a-date'),key:mkKey(m,y),status:'pending'};if(_eAid){const i=A.findIndex(x=>x.id===_eAid);if(i>=0)A[i]=na;else A.push(na)}else A.push(na);svA();closeM('am');rAdvSels();rAdv();}
+function syncAdvModal(){
+  const isInst=document.getElementById('a-dtype-inst').checked;
+  q('a-inst-row').style.display=isInst?'block':'none';
+  const amt=parseFloat(qv('a-amt'))||0,inst=parseFloat(qv('a-inst'))||0;
+  const prev=q('a-inst-preview');
+  if(isInst&&amt>0&&inst>0){const months=Math.ceil(amt/inst);prev.style.display='block';prev.innerHTML='<b>'+fmt(inst)+' ฿/month</b> × '+months+' months = '+fmt(inst*months)+' ฿ total<br><span style="color:#b45309">Remaining balance tracked automatically each payroll.</span>';}
+  else prev.style.display='none';
+}
+function openAddAdv(){_eAid=null;q('btn-del-adv').style.display='none';['a-amt','a-note','a-inst'].forEach(id=>{const el=q(id);if(el)el.value='';});q('a-date').value=new Date().toISOString().split('T')[0];q('a-s').innerHTML='';S.filter(s=>s.st==='Active').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn;q('a-s').appendChild(o)});document.getElementById('a-dtype-full').checked=true;q('a-inst-row').style.display='none';q('a-inst-preview').style.display='none';openM('am');}
+function openEditAdv(id){const a=A.find(x=>x.id===id);if(!a)return;openAddAdv();_eAid=id;q('btn-del-adv').style.display='inline-flex';q('a-s').value=a.staffId;q('a-amt').value=a.amt;q('a-note').value=a.note||'';q('a-date').value=a.date||'';const[ky,km]=a.key.split('_');q('a-dy').value=ky;q('a-dm').value=km;if(a.installment){document.getElementById('a-dtype-inst').checked=true;q('a-inst').value=a.installment;syncAdvModal();}else{document.getElementById('a-dtype-full').checked=true;syncAdvModal();}}
+function saveAdv(){const isInst=document.getElementById('a-dtype-inst').checked;const amt=parseFloat(qv('a-amt'))||0;const inst=isInst?(parseFloat(qv('a-inst'))||0):0;const m=qv('a-dm'),y=qv('a-dy');const na={id:_eAid||Date.now().toString(),staffId:qv('a-s'),amt,installment:isInst?inst:0,remaining:_eAid?(A.find(x=>x.id===_eAid)||{}).remaining||amt:amt,note:qv('a-note').trim(),date:qv('a-date'),key:mkKey(m,y),status:'pending'};if(_eAid){const i=A.findIndex(x=>x.id===_eAid);if(i>=0)A[i]=na;else A.push(na)}else A.push(na);svA();closeM('am');rAdvSels();rAdv();}
 function markAdv(id){const a=A.find(x=>x.id===id);if(a){a.status='deducted';svA();rAdv();}}
 
 q('tab-ps').addEventListener('click',function(){this.classList.add('active');q('tab-cert').classList.remove('active');q('dtab-ps').style.display='block';q('dtab-cert').style.display='none';});
