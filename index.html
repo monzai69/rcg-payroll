@@ -15,8 +15,6 @@ body{font-family:'Sarabun',sans-serif;background:#f4f6f8;color:#1a1a2e;font-size
 .sb.collapsed{transform:translateX(-200px)}
 .main{flex:1;padding:24px;margin-left:200px;overflow-x:hidden;overflow-y:auto;height:100vh;transition:margin-left .25s ease}
 .main.expanded{margin-left:0}
-.sb-toggle{position:fixed;top:14px;left:8px;z-index:11;background:var(--nv);border:none;color:#fff;width:30px;height:30px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:left .25s ease}
-.sb-toggle.collapsed{left:12px}
 .sb-co{font-size:10px;color:rgba(255,255,255,.4);letter-spacing:1.5px;text-transform:uppercase}
 .sb-title{color:#fff;font-size:15px;font-weight:700;margin-top:4px}
 .ni{display:flex;align-items:center;gap:9px;padding:11px 16px;color:rgba(255,255,255,.6);cursor:pointer;font-size:13px;border-left:3px solid transparent;transition:all .15s;user-select:none}
@@ -259,10 +257,10 @@ window.cloudLoad=async()=>{
   </div>
 </div>
 
-<button class="sb-toggle" id="sb-toggle" onclick="toggleSidebar()" title="Toggle menu">☰</button>
+
 <div class="app" id="app" style="display:none">
 <div class="sb">
-  <div class="sb-logo"><div class="sb-co">ReadyCheckGo</div><div class="sb-title">Payroll v10</div></div>
+<div class="sb-logo" style="display:flex;align-items:center;justify-content:space-between"><div><div class="sb-co">ReadyCheckGo</div><div class="sb-title">Payroll v10</div></div><button onclick="toggleSidebar()" style="background:none;border:none;color:rgba(255,255,255,.6);font-size:18px;cursor:pointer;padding:0">☰</button></div>  
   <div style="margin-top:8px" id="nav">
     <div class="ni active" data-pg="dash"><i class="ti ti-layout-dashboard"></i>Dashboard</div>
     <div class="ni" data-pg="staff"><i class="ti ti-users"></i>Staff</div>
