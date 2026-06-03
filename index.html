@@ -2582,12 +2582,13 @@ ld();initSels();rDash();initLogoHandlers();rDocLogoModeUI();
 function toggleSidebar(){
   const sb=document.querySelector('.sb');
   const main=document.querySelector('.main');
-  const btn=document.getElementById('sb-toggle');
   const collapsed=sb.classList.toggle('collapsed');
   main.classList.toggle('expanded',collapsed);
-  btn.classList.toggle('collapsed',collapsed);
-  btn.textContent=collapsed?'☰':'✕';
   localStorage.setItem('sb_collapsed',collapsed?'1':'0');
+  // Show/hide the rescue button
+  let rescue=document.getElementById('sb-rescue');
+  if(!rescue){rescue=document.createElement('button');rescue.id='sb-rescue';rescue.onclick=toggleSidebar;rescue.style.cssText='position:fixed;top:12px;left:8px;z-index:999;background:var(--nv);border:none;color:#fff;width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:18px;display:none';rescue.textContent='☰';document.body.appendChild(rescue);}
+  rescue.style.display=collapsed?'flex':'none';
 }
 
 function navTo(pg){
@@ -2606,10 +2607,9 @@ function navTo(pg){
   if(localStorage.getItem('sb_collapsed')==='1'){
     const sb=document.querySelector('.sb');
     const main=document.querySelector('.main');
-    const btn=document.getElementById('sb-toggle');
     if(sb)sb.classList.add('collapsed');
     if(main)main.classList.add('expanded');
-    if(btn){btn.classList.add('collapsed');btn.textContent='☰';}
+    const r=document.createElement('button');r.id='sb-rescue';r.onclick=toggleSidebar;r.style.cssText='position:fixed;top:12px;left:8px;z-index:999;background:var(--nv);border:none;color:#fff;width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center';r.textContent='☰';document.body.appendChild(r);
   }
 })();
 
