@@ -11,8 +11,12 @@
 body{font-family:'Sarabun',sans-serif;background:#f4f6f8;color:#1a1a2e;font-size:14px}
 :root{--nv:#0f2744;--gd:#c9973a;--ok:#2d7d46;--fpt:#0e7490;--doc:#7c3aed;--gdbg:#fdf6e8;--gdbd:#e8d5a3}
 .app{display:flex;height:100vh;overflow:hidden}
-.sb{width:200px;min-width:200px;background:var(--nv);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;overflow-y:auto;z-index:10;height:100vh;overflow-y:auto}
-.sb-logo{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sb{width:200px;min-width:200px;background:var(--nv);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;overflow-y:auto;z-index:10;transition:transform .25s ease}
+.sb.collapsed{transform:translateX(-200px)}
+.main{flex:1;padding:24px;margin-left:200px;overflow-x:hidden;overflow-y:auto;height:100vh;transition:margin-left .25s ease}
+.main.expanded{margin-left:0}
+.sb-toggle{position:fixed;top:14px;left:212px;z-index:11;background:var(--nv);border:none;color:#fff;width:30px;height:30px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:left .25s ease}
+.sb-toggle.collapsed{left:12px}
 .sb-co{font-size:10px;color:rgba(255,255,255,.4);letter-spacing:1.5px;text-transform:uppercase}
 .sb-title{color:#fff;font-size:15px;font-weight:700;margin-top:4px}
 .ni{display:flex;align-items:center;gap:9px;padding:11px 16px;color:rgba(255,255,255,.6);cursor:pointer;font-size:13px;border-left:3px solid transparent;transition:all .15s;user-select:none}
@@ -255,6 +259,7 @@ window.cloudLoad=async()=>{
   </div>
 </div>
 
+<button class="sb-toggle" id="sb-toggle" onclick="toggleSidebar()" title="Toggle menu">☰</button>
 <div class="app" id="app" style="display:none">
 <div class="sb">
   <div class="sb-logo"><div class="sb-co">ReadyCheckGo</div><div class="sb-title">Payroll v10</div></div>
@@ -288,10 +293,10 @@ window.cloudLoad=async()=>{
     <div class="card"><div class="fx jb ic" style="margin-bottom:10px"><span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase">📈 Top Revenue</span><select id="dash-rev-dept" style="font-size:11px;padding:3px 6px;width:110px"><option value="">All Depts</option></select></div><div id="ch-rev"></div></div>
     <div class="card"><div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:10px">🤝 Top ค่ามือ</div><div id="ch-kam"></div></div>
   </div>
-  <div class="g2">
-    <div class="card"><div class="st">Active Staff</div><div id="dash-sl" style="max-height:280px;overflow-y:auto"></div></div>
-    <div class="card"><div class="st">Payroll Summary</div><div id="dash-ps"></div></div>
-  </div>
+  <!-- Pending Items strip -->
+  <div id="dash-pending" style="margin-bottom:14px"></div>
+  <!-- Payroll Summary full width -->
+  <div class="card"><div class="st">Payroll Summary</div><div id="dash-ps"></div></div>
 </div>
 
 <div class="pg" id="pg-staff">
@@ -1088,7 +1093,15 @@ function rDash(){
   q('ch-cost').innerHTML=bars([...all].sort((a,b)=>b.net-a.net).slice(0,7).map(d=>({s:d.s,v:d.net})),'var(--nv)');
   const rd=qv('dash-rev-dept');q('ch-rev').innerHTML=bars([...all].filter(d=>!rd||d.s.dept===rd).sort((a,b)=>b.rev-a.rev).filter(d=>d.rev>0).slice(0,7).map(d=>({s:d.s,v:d.rev})),'#059669');
   q('ch-kam').innerHTML=bars([...all].sort((a,b)=>b.kT-a.kT).filter(d=>d.kT>0).slice(0,7).map(d=>({s:d.s,v:d.kT})),'var(--gd)');
-  q('dash-sl').innerHTML=act.map(s=>'<div class="fx ic g8" style="padding:6px 0;border-bottom:1px solid #f9fafb"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div style="flex:1"><div style="font-size:13px;font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.dept+' · '+brN(s.br)+'</div></div>'+empBadge(s)+'</div>').join('');
+  // Pending items strip
+  const pendingLeave=LVR.filter(r=>r.status==='pending').length;
+  const pendingAdv=A.filter(a=>a.status==='pending').length;
+  const hasPending=pendingLeave>0||pendingAdv>0;
+  q('dash-pending').innerHTML=hasPending?
+    '<div style="display:flex;gap:10px;flex-wrap:wrap">'+
+    (pendingLeave>0?'<div onclick="navTo(\'leave\')" style="flex:1;min-width:160px;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.background=\'#fef3c7\'" onmouseout="this.style.background=\'#fffbeb\'"><span style="font-size:22px">🕐</span><div><div style="font-size:13px;font-weight:700;color:#92400e">Pending Leave Approvals</div><div style="font-size:20px;font-weight:800;color:#f59e0b">'+pendingLeave+' request'+(pendingLeave>1?'s':'')+'</div></div></div>':'')+
+    (pendingAdv>0?'<div onclick="navTo(\'adv\')" style="flex:1;min-width:160px;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.background=\'#fef3c7\'" onmouseout="this.style.background=\'#fffbeb\'"><span style="font-size:22px">💳</span><div><div style="font-size:13px;font-weight:700;color:#92400e">Pending Advances</div><div style="font-size:20px;font-weight:800;color:#f59e0b">'+pendingAdv+' record'+(pendingAdv>1?'s':'')+'</div></div></div>':'')+
+    '</div>':'';
   // Branch-grouped payroll summary
   const act2=S.filter(x=>x.st==='Active'&&x.emptype!=='parttime');
   const branchIds=[...new Set(act2.map(s=>s.br))].filter(Boolean);
@@ -2567,6 +2580,40 @@ function initLogoHandlers(){
 }
 
 ld();initSels();rDash();initLogoHandlers();rDocLogoModeUI();
+
+function toggleSidebar(){
+  const sb=document.querySelector('.sb');
+  const main=document.querySelector('.main');
+  const btn=document.getElementById('sb-toggle');
+  const collapsed=sb.classList.toggle('collapsed');
+  main.classList.toggle('expanded',collapsed);
+  btn.classList.toggle('collapsed',collapsed);
+  btn.textContent=collapsed?'☰':'✕';
+  localStorage.setItem('sb_collapsed',collapsed?'1':'0');
+}
+
+function navTo(pg){
+  document.querySelectorAll('#nav .ni').forEach(n=>n.classList.remove('active'));
+  const ni=document.querySelector('#nav .ni[data-pg="'+pg+'"]');
+  if(ni)ni.classList.add('active');
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));
+  const pgEl=document.getElementById('pg-'+pg);
+  if(pgEl)pgEl.classList.add('active');
+  if(pg==='leave'){initLeaveSelectors();rLeavePage();}
+  if(pg==='adv'){rAdvSels();rAdv();}
+}
+
+// Restore sidebar state
+(function(){
+  if(localStorage.getItem('sb_collapsed')==='1'){
+    const sb=document.querySelector('.sb');
+    const main=document.querySelector('.main');
+    const btn=document.getElementById('sb-toggle');
+    if(sb)sb.classList.add('collapsed');
+    if(main)main.classList.add('expanded');
+    if(btn){btn.classList.add('collapsed');btn.textContent='☰';}
+  }
+})();
 
 /* ══════════════════ LEAVE MANAGEMENT ══════════════════ */
 
