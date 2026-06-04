@@ -1458,18 +1458,26 @@ function saveStaff(){
 async function publishSalary(){
   const m=qv('pm'),y=qv('py');
   const btn=q('btn-publish');
-  if(!confirm('Send LINE notification to all staff for '+MTH[parseInt(m)-1]+' '+y+'?'))return;
-  btn.textContent='⏳ Sending...';btn.disabled=true;
+  const period=MTH[parseInt(m)-1]+' '+y;
+  if(!confirm('Send LINE notification to all staff for '+period+'?'))return;
+  btn.innerHTML='<i class="ti ti-loader"></i> Sending...';btn.disabled=true;
   try{
     const res=await fetch('https://rcg-payroll-line-production.up.railway.app/api/publish-salary',{
-      method:'POST',headers:{'Content-Type':'application/json'},
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({month:m,year:y})
     });
     const data=await res.json();
-    if(data.ok){alert('✅ Sent to '+data.sent+' staff! ('+data.total+' have LINE registered)');}
-    else alert('❌ Error: '+data.msg);
-  }catch(e){alert('❌ Failed to connect to server');}
-  btn.innerHTML='<i class="ti ti-send"></i>Publish to LINE';btn.disabled=false;
+    if(data.ok){
+      alert('✅ Sent to '+data.sent+' of '+data.total+' staff with LINE registered!');
+    } else {
+      alert('❌ Server error: '+data.msg);
+    }
+  } catch(e){
+    alert('❌ Connection failed: '+e.message);
+  }
+  btn.innerHTML='<i class="ti ti-send"></i>Publish to LINE';
+  btn.disabled=false;
 }
   
 /* ══════════════════ HISTORY ══════════════════ */
