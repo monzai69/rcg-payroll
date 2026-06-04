@@ -2880,8 +2880,27 @@ function saveLeave(){
   svLV();closeM('lvm');rLeavePage();
 }
 
-function approveLeave(id){const r=LVR.find(x=>x.id===id);if(r){r.status='approved';svLV();rLeavePage();}}
-function rejectLeave(id){const r=LVR.find(x=>x.id===id);if(r){r.status='rejected';svLV();rLeavePage();}}
+const LINE_SERVER='https://rcg-payroll-line-production.up.railway.app';
+async function notifyLeaveResult(staffId,leaveId,status,reason){
+  try{
+    await fetch(LINE_SERVER+'/api/notify-leave-result',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({staffId,leaveId,status,reason:reason||''})
+    });
+  }catch(e){console.warn('LINE notify failed:',e);}
+}
+function approveLeave(id){
+  const r=LVR.find(x=>x.id===id);
+  if(r){r.status='approved';svLV();rLeavePage();notifyLeaveResult(r.staffId,id,'approved','');}
+}
+function rejectLeave(id){
+  const r=LVR.find(x=>x.id===id);
+  if(!r)return;
+  const reason=prompt('Reason for rejection (optional):','');
+  if(reason===null)return; // cancelled
+  r.status='rejected';svLV();rLeavePage();notifyLeaveResult(r.staffId,id,'rejected',reason);
+}
 
 // ── LEAVE TAB IN HISTORY MODAL ──
 function loadLeaveTab(sid){
