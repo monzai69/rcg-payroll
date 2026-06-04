@@ -1454,6 +1454,24 @@ function saveStaff(){
   svS();closeM('sm');rStaff();rDeptF();
 }
 
+/* ══════════════════ Published ══════════════════ */
+async function publishSalary(){
+  const m=qv('pm'),y=qv('py');
+  const btn=q('btn-publish');
+  if(!confirm('Send LINE notification to all staff for '+MTH[parseInt(m)-1]+' '+y+'?'))return;
+  btn.textContent='⏳ Sending...';btn.disabled=true;
+  try{
+    const res=await fetch('https://rcg-payroll-line-production.up.railway.app/api/publish-salary',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({month:m,year:y})
+    });
+    const data=await res.json();
+    if(data.ok){alert('✅ Sent to '+data.sent+' staff! ('+data.total+' have LINE registered)');}
+    else alert('❌ Error: '+data.msg);
+  }catch(e){alert('❌ Failed to connect to server');}
+  btn.innerHTML='<i class="ti ti-send"></i>Publish to LINE';btn.disabled=false;
+}
+  
 /* ══════════════════ HISTORY ══════════════════ */
 function diffStaff(oldS,newS){
   const changes=[];
