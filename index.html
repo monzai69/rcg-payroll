@@ -326,6 +326,7 @@ window.cloudLoad=async()=>{
       <div class="fx g8 ic"><label style="margin:0;font-weight:600">Period</label><select id="pm" style="width:140px"></select><select id="py" style="width:95px"></select></div>
       <div style="flex:1"></div>
       <button class="btn bok bsm" id="btn-saveall"><i class="ti ti-device-floppy"></i>Save All</button>
+      <button class="btn bsm" id="btn-publish" style="background:#0e7490;color:#fff" onclick="publishSalary()"><i class="ti ti-send"></i>Publish to LINE</button>
       <button class="btn bgd bsm" id="btn-export"><i class="ti ti-table-export"></i>Export CSV</button>
       <label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;font-size:12px;cursor:pointer;font-family:'Sarabun',sans-serif;font-weight:600;background:#7c3aed;color:#fff;vertical-align:middle;line-height:1" title="Import ค่ามือ & Revenue from LIV clinic CSV"><i class="ti ti-file-import" style="font-size:13px"></i>Import ค่ามือ CSV<input type="file" id="csv-import-input" accept=".csv,.xlsx" style="display:none"></label>
       <span id="sync-status" style="display:none;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:#f0fdf4"></span>
