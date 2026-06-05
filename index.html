@@ -896,6 +896,7 @@ window.cloudLoad=async()=>{
 
 <script>
 const SK='rcg10_s',PK='rcg10_p',CK='rcg10_c',AK='rcg10_a',APK='rcg10_ap',BK='rcg10_b',LK='rcg10_logos',SSK='rcg10_sigstamp',LVRK='rcg10_leaves';
+const LINE_SERVER='https://rcg-payroll-line-production.up.railway.app';
 let S=[],P={},C={},A=[],AP=[],B=[],LOGOS={rcg:null,clinic:null,mode:'rcg'},SIGSTAMP={sig:null,stamp:null,showStamp:true},LVR=[];
 let _eSid=null,_eBid=null,_eAid=null,_eAPid=null;
 
@@ -2659,8 +2660,6 @@ function navTo(pg){
   if(pg==='adv'){rAdvSels();rAdv();}
   if(pg==='docs'){popDocSels();rPS();rCert();rDocLogoModeUI();loadDocRequests();}
 }
-
-const LINE_SERVER='https://rcg-payroll-line-production.up.railway.app';
 
 async function loadDocRequests(){
   const list=q('docreq-list');
