@@ -2186,12 +2186,25 @@ function saveAll(){
       items:JSON.parse(JSON.stringify(s.items||[]))
     };
     const c=calcM(s,e,key);e.net=c.net;P[key][s.id]=e;
-    if(c.adv>0){A.forEach(a=>{if(a.staffId===s.id&&a.key===key&&a.status==='pending'&&a.installment>0){const deducted=Math.min(a.installment,a.remaining||a.amt);a.remaining=Math.max(0,(a.remaining||a.amt)-deducted);if(a.remaining<=0)a.status='deducted';}});svA();}
+    if(c.adv>0){
+      A.forEach(a=>{
+        if(a.staffId===s.id&&a.key===key&&a.status==='pending'&&a.installment>0){
+          // Only deduct if not already deducted this period
+          const alreadyKey='deducted_'+key;
+          if(!a[alreadyKey]){
+            const deducted=Math.min(a.installment,a.remaining||a.amt);
+            a.remaining=Math.max(0,(a.remaining||a.amt)-deducted);
+            a[alreadyKey]=true; // mark as deducted for this period
+            if(a.remaining<=0)a.status='deducted';
+          }
+        }
+      });
+      svA();
+    }
   });
   svP();alert('Saved ✓ — salaries locked for this period.');
 }
 function doExport(){
-  saveAll();
   const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);
   // Helper: format number, negatives in (brackets)
   const fmtN=n=>{
@@ -2725,8 +2738,10 @@ async function approveDoc(docId){
 async function rejectDoc(docId){
   if(!confirm('Reject this document request?'))return;
   try{
-    await fetch(LINE_SERVER+'/api/reject-document',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({docId})});
-    alert('✅ Request rejected, staff notified via LINE.');
+    const res=await fetch(LINE_SERVER+'/api/reject-document',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({docId})});
+    const data=await res.json();
+    if(data.ok)alert('✅ Request rejected, staff notified via LINE.');
+    else alert('❌ Error: '+data.msg);
   }catch(e){alert('❌ Connection error: '+e.message);}
   loadDocRequests();
 }
@@ -3020,14 +3035,17 @@ async function notifyLeaveResult(staffId,leaveId,status,reason){
 }
 function approveLeave(id){
   const r=LVR.find(x=>x.id===id);
-  if(r){r.status='approved';svLV();rLeavePage();notifyLeaveResult(r.staffId,id,'approved','');}
+  if(!r||r.status!=='pending')return;
+  r.status='approved';svLV();rLeavePage();
+  notifyLeaveResult(r.staffId,id,'approved','');
 }
 function rejectLeave(id){
   const r=LVR.find(x=>x.id===id);
-  if(!r)return;
+  if(!r||r.status!=='pending')return;
   const reason=prompt('Reason for rejection (optional):','');
-  if(reason===null)return; // cancelled
-  r.status='rejected';svLV();rLeavePage();notifyLeaveResult(r.staffId,id,'rejected',reason);
+  if(reason===null)return;
+  r.status='rejected';svLV();rLeavePage();
+  notifyLeaveResult(r.staffId,id,'rejected',reason);
 }
 
 // ── LEAVE TAB IN HISTORY MODAL ──
