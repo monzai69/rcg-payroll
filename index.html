@@ -702,6 +702,7 @@ window.cloudLoad=async()=>{
     <div class="fr"><label>Last Name</label><input id="s-ln" type="text"></div>
     <div class="fr"><label>Nickname</label><input id="s-nn" type="text"></div>
     <div class="fr"><label>Staff ID</label><input id="s-eid" type="text" placeholder="auto if blank"></div>
+    <div class="fr"><label>Phone Number</label><input id="s-phone" type="tel" placeholder="e.g. 0812345678"></div>
     <div class="fr"><label>Department</label><input id="s-dept" list="dl-dept" type="text" placeholder="Type or select..."><datalist id="dl-dept"></datalist></div>
     <div class="fr"><label>Position</label><input id="s-pos" type="text"></div>
     <div class="fr"><label>Start Date</label><input id="s-sd" type="date"></div>
@@ -1210,9 +1211,10 @@ function rStaff(){
     const ri=s.emptype==='fulltime'?(s.base?fmt(s.base)+' ฿/mo':'—'):s.emptype==='fullparttime'?(s.fptmethod==='daily'?fmt(s.fptdayrate)+' ฿/day':fmt(s.hrrate)+' ฿/hr'):s.pttype==='doctor'?fmt(s.hrrate)+' ฿/hr+DF':fmt(s.dayrate)+' ฿/day';
     const tx=s.ct==='permanent'?'<span class="badge bperm">ภงด.1</span>':s.ct==='permanent_wht'?'<span class="badge" style="background:#dcfce7;color:#166534">WHT+Leave</span>':'<span class="badge bcont">WHT</span>';
     const stBadge=s.st==='Active'?'<span class="badge ba">Active</span>':s.st==='Resigned'?'<span class="badge" style="background:#fee2e2;color:#991b1b">Resigned</span>':'<span class="badge bi">InActive</span>';
+    const lineBadge=s.lineUserId?'<span title="LINE Connected" style="display:inline-flex;align-items:center;gap:3px;background:#dcfce7;color:#16a34a;border-radius:20px;padding:2px 7px;font-size:10px;font-weight:700;margin-left:4px"><i class="ti ti-brand-line" style="font-size:11px"></i>LINE</span>':'<span title="LINE Not connected" style="display:inline-flex;align-items:center;gap:3px;background:#f3f4f6;color:#9ca3af;border-radius:20px;padding:2px 7px;font-size:10px;font-weight:600;margin-left:4px"><i class="ti ti-brand-line" style="font-size:11px"></i>—</span>';
     const tr=document.createElement('tr');
     if(isHidden)tr.style.cssText='opacity:.5;background:#fafafa;';
-    tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td>'+stBadge+'</td><td style="white-space:nowrap"></td>';
+    tr.innerHTML='<td><div class="fx ic g8"><div class="av" style="width:30px;height:30px;font-size:12px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div><div style="font-weight:600">'+s.nn+' '+s.fn+'</div><div class="ts tm">'+s.ln+'</div></div></div></td><td>'+s.dept+'<div class="ts tm">'+brN(s.br)+'</div></td><td>'+empBadge(s)+'</td><td style="font-weight:600">'+ri+'</td><td>'+tx+'</td><td>'+(pills||'<span class="tm ts">—</span>')+'</td><td>'+stBadge+lineBadge+'</td><td style="white-space:nowrap"></td>';
     const btn=document.createElement('button');
     btn.className='btn bo bsm';btn.innerHTML='<i class="ti ti-edit"></i>';
     btn.addEventListener('click',function(){openEdit(s.id);});
@@ -1256,7 +1258,7 @@ function syncS(){
 
 function openAdd(){
   _eSid=null;q('sm-title').textContent='Add Staff';q('btn-del-staff').style.display='none';
-  ['s-fn','s-ln','s-nn','s-eid','s-dept','s-br-txt','s-pos','s-base','s-ex','s-otrate','s-hrrate','s-stdhrs','s-fptdayrate','s-dhrrate','s-df','s-dayrate'].forEach(id=>{const el=q(id);if(el)el.value='';});
+  ['s-fn','s-ln','s-nn','s-eid','s-phone','s-dept','s-br-txt','s-pos','s-base','s-ex','s-otrate','s-hrrate','s-stdhrs','s-fptdayrate','s-dhrrate','s-df','s-dayrate'].forEach(id=>{const el=q(id);if(el)el.value='';});
   q('s-ex').value='0';q('s-otrate').value='0';q('s-dhrs')&&(q('s-dhrs').value='7');
   q('s-emptype').value='fulltime';q('s-ct').value='permanent';q('s-st').value='Active';q('s-pttype').value='parttime';q('s-fptmethod').value='hourly';
   q('s-sd').value=new Date().toISOString().split('T')[0];
@@ -1279,6 +1281,7 @@ try{
   q('sm-title').textContent='Edit — '+s.nn+' '+s.fn;
   q('btn-del-staff').style.display='inline-flex';
   q('s-fn').value=s.fn||'';q('s-ln').value=s.ln||'';q('s-nn').value=s.nn||'';q('s-eid').value=s.id||'';
+  q('s-phone')&&(q('s-phone').value=s.phone||'');
   q('s-pos').value=s.pos||'';q('s-sd').value=s.sd||'';q('s-dept').value=s.dept||'';
   try{const bObj=B.find(x=>x.id===s.br);q('s-br-txt').value=bObj?bObj.name:(s.br||'');}catch(e){}
   q('s-emptype').value=s.emptype||'fulltime';q('s-ct').value=s.ct||'permanent';q('s-st').value=s.st||'Active';
@@ -1466,7 +1469,7 @@ function saveStaff(){
   }
   // If January or no start recorded, clear (use ×12)
   if(ssoStartM===1)ssoStartM=null,ssoStartY=null;
-  const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:newCt,st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0,
+  const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),phone:qv('s-phone').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:newCt,st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0,
     ssoStartM,ssoStartY,
     leaveAllowance:hasLeave?{annual:parseFloat(qv('s-lv-annual'))||6,sick:parseFloat(qv('s-lv-sick'))||30,business:parseFloat(qv('s-lv-business'))||3,custom:getCustomLeaveRows()}:null,
     incentive6m:q('s-has6m').checked?{enabled:true,label:qv('s-6mlabel').trim()||'6M Incentive',tiers:get6mTiers()}:{enabled:false}};
