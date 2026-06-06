@@ -182,7 +182,7 @@ window.cloudSave=async(key,data)=>{
   // logos and sigstamp have base64 images — store separately to avoid 1MB limit
   if(col==='logos'||col==='sigstamp'){
     await window.fbSet('config',col,typeof data==='string'?JSON.parse(data):{...JSON.parse(data)});
-  } else if(col==='staff'||col==='anytime'||col==='advance'||col==='branches'){
+  } else if(col==='staff'||col==='anytime'||col==='advance'||col==='branches'||col==='leaves'){
     const arr=typeof data==='string'?JSON.parse(data):data;
     await window.fbSet('config',col,{data:JSON.stringify(arr),updatedAt:Date.now()});
   } else if(col==='payroll'){
