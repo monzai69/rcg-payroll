@@ -386,8 +386,10 @@ window.cloudLoad=async()=>{
           <tr style="background:#f8fafc;border-bottom:2px solid #e5e7eb">
             <th id="lvsort-name" class="lvsort" style="padding:10px 14px;text-align:left;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Name <span class="sort-arrow">↕</span></th>
             <th id="lvsort-annual" class="lvsort" style="padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Annual <span class="sort-arrow">↕</span></th>
+            <th id="lvsort-carryover" style="padding:10px 14px;text-align:center;white-space:nowrap;font-weight:700;color:#374151">Carryover</th>
             <th id="lvsort-sick" class="lvsort" style="padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Sick <span class="sort-arrow">↕</span></th>
             <th id="lvsort-business" class="lvsort" style="padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Business <span class="sort-arrow">↕</span></th>
+            <th id="lvsort-lwop" style="padding:10px 14px;text-align:center;white-space:nowrap;font-weight:700;color:#9ca3af">LWOP</th>
             <th id="lvsort-total" class="lvsort" style="padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151">Total Used <span class="sort-arrow">↕</span></th>
           </tr>
         </thead>
@@ -624,6 +626,8 @@ window.cloudLoad=async()=>{
         <option value="annual">Annual Leave</option>
         <option value="sick">Sick Leave</option>
         <option value="business">Business Leave</option>
+        <option value="carryover">Carryover Leave</option>
+        <option value="lwop">LWOP (Leave Without Pay)</option>
         <option value="custom">Other (custom)</option>
       </select>
     </div>
@@ -788,6 +792,8 @@ window.cloudLoad=async()=>{
       <div class="fr"><label>Annual Leave (days)</label><input type="number" id="s-lv-annual" value="6" min="0" step="0.5"></div>
       <div class="fr"><label>Sick Leave (days)</label><input type="number" id="s-lv-sick" value="30" min="0" step="0.5"></div>
       <div class="fr"><label>Business Leave (days)</label><input type="number" id="s-lv-business" value="3" min="0" step="0.5"></div>
+      <div class="fr"><label>LWOP Max (days/yr)</label><input type="number" id="s-lv-lwop" value="15" min="0" step="1"></div>
+      <div class="fr"><label>Carryover Days <span style="font-size:10px;color:#9ca3af">(from prev yr, max 3)</span></label><input type="number" id="s-lv-carryover" value="0" min="0" max="3" step="0.5"></div>
     </div>
     <!-- Custom leave types -->
     <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Custom Leave Types</div>
@@ -1303,6 +1309,8 @@ try{
   q('s-lv-annual')&&(q('s-lv-annual').value=lv.annual!==undefined?lv.annual:6);
   q('s-lv-sick')&&(q('s-lv-sick').value=lv.sick!==undefined?lv.sick:30);
   q('s-lv-business')&&(q('s-lv-business').value=lv.business!==undefined?lv.business:3);
+  q('s-lv-lwop')&&(q('s-lv-lwop').value=lv.lwop!==undefined?lv.lwop:15);
+  q('s-lv-carryover')&&(q('s-lv-carryover').value=lv.carryover!==undefined?lv.carryover:0);
   q('s-lv-custom-rows')&&(q('s-lv-custom-rows').innerHTML='');
   (lv.custom||[]).forEach(c=>addCustomLeaveRow(c));
   q('s-leave-section')&&(q('s-leave-section').style.display=(s.ct==='permanent'||s.ct==='permanent_wht')?'block':'none');
@@ -1471,7 +1479,7 @@ function saveStaff(){
   if(ssoStartM===1)ssoStartM=null,ssoStartY=null;
   const ns={id:_eSid||qv('s-eid').trim()||'S'+Date.now(),fn:qv('s-fn').trim(),ln:qv('s-ln').trim(),nn:qv('s-nn').trim(),phone:qv('s-phone').trim(),dept:qv('s-dept').trim(),pos:qv('s-pos').trim(),br:mb?mb.id:brTxt,sd:qv('s-sd'),emptype:et,ct:newCt,st:qv('s-st'),ex:parseFloat(qv('s-ex'))||0,wht:parseFloat(C.wht)||3,otrate:parseFloat(qv('s-otrate'))||0,items:getItems(),base:parseFloat(qv('s-base'))||0,fptmethod:qv('s-fptmethod'),hrrate:et==='fullparttime'?parseFloat(qv('s-hrrate'))||0:parseFloat(qv('s-dhrrate'))||0,stdhrs:160,fptdayrate:parseFloat(qv('s-fptdayrate'))||0,pttype:qv('s-pttype'),dayrate:parseFloat(qv('s-dayrate'))||0,dhrs:parseFloat(qv('s-dhrs'))||7,df:parseFloat(qv('s-df'))||0,
     ssoStartM,ssoStartY,
-    leaveAllowance:hasLeave?{annual:parseFloat(qv('s-lv-annual'))||6,sick:parseFloat(qv('s-lv-sick'))||30,business:parseFloat(qv('s-lv-business'))||3,custom:getCustomLeaveRows()}:null,
+    leaveAllowance:hasLeave?{annual:parseFloat(qv('s-lv-annual'))||6,sick:parseFloat(qv('s-lv-sick'))||30,business:parseFloat(qv('s-lv-business'))||3,lwop:parseFloat(qv('s-lv-lwop'))||15,carryover:parseFloat(qv('s-lv-carryover'))||0,custom:getCustomLeaveRows()}:null,
     incentive6m:q('s-has6m').checked?{enabled:true,label:qv('s-6mlabel').trim()||'6M Incentive',tiers:get6mTiers()}:{enabled:false}};
   if(_eSid){
     const i=S.findIndex(x=>x.id===_eSid);
@@ -2769,23 +2777,89 @@ function getLeaveAllowance(s){
     annual:lv.annual!==undefined?lv.annual:6,
     sick:lv.sick!==undefined?lv.sick:30,
     business:lv.business!==undefined?lv.business:3,
+    lwop:lv.lwop!==undefined?lv.lwop:15,
+    carryover:lv.carryover!==undefined?lv.carryover:0, // manually set or auto-calculated
     custom:lv.custom||[]
   };
 }
 
+// Calculate pro-rata annual leave for first year
+function calcProRataAnnual(s, year){
+  if(!s.sd||s.emptype!=='fulltime')return null;
+  const start=new Date(s.sd);
+  const anniversary=new Date(start);
+  anniversary.setFullYear(anniversary.getFullYear()+1);
+  const annivYear=anniversary.getFullYear();
+  // Only applies in the year they hit 1-year anniversary
+  if(annivYear!==year)return null;
+  // Already past anniversary this year — calculate remaining months
+  const annivMonth=anniversary.getMonth(); // 0-based
+  const remainingMonths=12-(annivMonth+1); // months from anniversary month+1 to Dec
+  if(remainingMonths<=0)return 0;
+  const allow=getLeaveAllowance(s);
+  const raw=(allow.annual/12)*remainingMonths;
+  // Round: 0.5+ up, below 0.5 discard
+  return raw%1>=0.5?Math.ceil(raw):Math.floor(raw);
+}
+
+// Get carryover days — from previous year unused (max 3), expired after June 30
+function getCarryoverDays(s, year){
+  if(s.emptype!=='fulltime')return{days:0,expired:false};
+  const allow=getLeaveAllowance(s);
+  const carryover=allow.carryover||0;
+  if(carryover<=0)return{days:0,expired:false};
+  // Carryover expires June 30 of the year
+  const today=new Date();
+  const expired=today.getFullYear()===year&&today.getMonth()>=6; // July=6 means past June 30
+  return{days:carryover,expired};
+}
+
+// Get effective annual allowance for a staff in a year (considering pro-rata)
+function getEffectiveAnnualAllowance(s, year){
+  const proRata=calcProRataAnnual(s,year);
+  if(proRata!==null)return proRata; // first year pro-rata
+  return getLeaveAllowance(s).annual;
+}
+
+// Get resignation pro-rata warning
+function getResignationProRata(s, year){
+  if(s.st!=='Resigned'||!s.sd||s.emptype!=='fulltime')return null;
+  const start=new Date(s.sd);
+  const anniversary=new Date(start);
+  anniversary.setFullYear(anniversary.getFullYear()+1);
+  if(new Date()<anniversary)return null; // hasn't hit 1 year yet
+  // Months worked this year
+  const monthsWorked=s.resignDate?
+    new Date(s.resignDate).getMonth()+1:
+    new Date().getMonth()+1;
+  const allow=getLeaveAllowance(s);
+  const raw=(allow.annual/12)*monthsWorked;
+  const earned=raw%1>=0.5?Math.ceil(raw):Math.floor(raw);
+  const used=getLeaveUsed(s.id,year,'annual',null);
+  return{earned,used,excess:Math.max(0,used-earned)};
+}
+
 function getLeaveUsed(sid,year,type,customName){
-  return LVR.filter(r=>r.staffId===sid&&r.status==='approved'&&r.year===year&&r.type===type&&(type!=='custom'||r.customName===customName)).reduce((s,r)=>s+r.days,0);
+  return LVR.filter(r=>r.staffId===sid&&r.status==='approved'&&r.year===year&&r.type===type&&(type!=='custom'||r.customName===customName)&&(type!=='lwop'||r.type==='lwop')).reduce((s,r)=>s+r.days,0);
 }
 
 function getLeaveBal(s,year){
   const allow=getLeaveAllowance(s);
+  const effectiveAnnual=getEffectiveAnnualAllowance(s,year);
+  const carryover=getCarryoverDays(s,year);
   const types=[
-    {key:'annual',label:'Annual',allowed:allow.annual},
+    {key:'annual',label:'Annual',allowed:effectiveAnnual},
     {key:'sick',label:'Sick',allowed:allow.sick},
     {key:'business',label:'Business',allowed:allow.business},
+    {key:'lwop',label:'LWOP',allowed:allow.lwop},
     ...(allow.custom||[]).map(c=>({key:'custom',label:c.name,customName:c.name,allowed:c.days}))
   ];
-  return types.map(t=>({...t,used:getLeaveUsed(s.id,year,t.key,t.customName||null),excess:Math.max(0,getLeaveUsed(s.id,year,t.key,t.customName||null)-t.allowed)}));
+  const result=types.map(t=>({...t,used:getLeaveUsed(s.id,year,t.key,t.customName||null),excess:Math.max(0,getLeaveUsed(s.id,year,t.key,t.customName||null)-t.allowed)}));
+  // Add carryover as separate entry
+  if(s.emptype==='fulltime'&&carryover.days>0){
+    result.splice(1,0,{key:'carryover',label:'Carryover'+(carryover.expired?' ⚠️ Expired':''),allowed:carryover.days,used:getLeaveUsed(s.id,year,'carryover',null),excess:0,isCarryover:true,expired:carryover.expired});
+  }
+  return result;
 }
 
 // ── LEAVE PAGE ──
@@ -2825,7 +2899,7 @@ function rLeavePending(){
   sec.style.display='block';
   q('lv-pending-list').innerHTML=pending.map(r=>{
     const s=S.find(x=>x.id===r.staffId);
-    const typeLabel={annual:'Annual',sick:'Sick',business:'Business',custom:r.customName||'Other'};
+    const typeLabel={annual:'Annual',sick:'Sick',business:'Business',carryover:'Carryover',lwop:'LWOP (No Pay)',custom:r.customName||'Other'};
     return'<div class="card" style="margin-bottom:8px;border-left:3px solid #f59e0b;display:flex;gap:12px;align-items:flex-start;padding:12px 14px">'+
       '<div class="av" style="width:36px;height:36px;font-size:13px;flex-shrink:0;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div>'+
       '<div style="flex:1">'+
@@ -2844,17 +2918,26 @@ function rLeavePending(){
 }
 
 function rLeaveBalanceTable(y){
-  const permStaff=S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht')&&s.st==='Active');
+  const permStaff=S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht')&&(s.st==='Active'||s.st==='Resigned'));
   const customNames=[];
   permStaff.forEach(s=>{(getLeaveAllowance(s).custom||[]).forEach(c=>{if(!customNames.includes(c.name))customNames.push(c.name);});});
   let rows=permStaff.map(s=>{
     const allow=getLeaveAllowance(s);
+    const effectiveAnnual=getEffectiveAnnualAllowance(s,y);
     const annual=getLeaveUsed(s.id,y,'annual',null);
     const sick=getLeaveUsed(s.id,y,'sick',null);
     const business=getLeaveUsed(s.id,y,'business',null);
+    const lwop=getLeaveUsed(s.id,y,'lwop',null);
+    const carryover=getCarryoverDays(s,y);
+    const carryoverUsed=getLeaveUsed(s.id,y,'carryover',null);
     const customUsed=customNames.map(n=>getLeaveUsed(s.id,y,'custom',n));
-    const total=annual+sick+business+customUsed.reduce((a,b)=>a+b,0);
-    return{s,annual,sick,business,customUsed,total,aAllow:allow.annual,sAllow:allow.sick,bAllow:allow.business,cAllow:customNames.map(n=>(allow.custom||[]).find(c=>c.name===n)||{days:0})};
+    const total=annual+sick+business+lwop+customUsed.reduce((a,b)=>a+b,0);
+    const proRata=calcProRataAnnual(s,y);
+    const resignation=getResignationProRata(s,y);
+    return{s,annual,sick,business,lwop,carryover,carryoverUsed,customUsed,total,
+      aAllow:effectiveAnnual,sAllow:allow.sick,bAllow:allow.business,lwopAllow:allow.lwop,
+      cAllow:customNames.map(n=>(allow.custom||[]).find(c=>c.name===n)||{days:0}),
+      proRata,resignation};
   });
   rows.sort((a,b)=>{
     let av,bv;
@@ -2865,32 +2948,27 @@ function rLeaveBalanceTable(y){
     else av=a.total,bv=b.total;
     return av>bv?_lvSortDir:av<bv?-_lvSortDir:0;
   });
-  const cell=(used,allowed)=>{
-    const exceeded=used>allowed;
-    return'<td style="padding:9px 14px;text-align:center;font-weight:600;'+(exceeded?'color:#e24b4a;background:#fff1f1;':'color:'+(used>0?'#374151':'#9ca3af')+';')+'">'+
-      used+'/'+allowed+'d'+
-    '</td>';
+  const cell=(used,allowed,isLwop,isCarryover,expired)=>{
+    const exceeded=!isLwop&&!isCarryover&&used>allowed;
+    const bg=expired?'background:#fff7ed;':exceeded?'background:#fff1f1;':'';
+    const color=expired?'color:#f59e0b':exceeded?'color:#e24b4a':used>0?'color:#374151':'color:#9ca3af';
+    return`<td style="padding:9px 14px;text-align:center;font-weight:600;${bg}${color}">${used}/${allowed}d${expired?' ⚠️':''}</td>`;
   };
-  document.querySelectorAll('.lvsort-custom').forEach(el=>el.remove());
-  const thead=document.querySelector('#lv-balance-table thead tr');
-  const totalTh=document.getElementById('lvsort-total');
-  customNames.forEach(n=>{
-    if(!document.getElementById('lvsort-custom-'+n)){
-      const th=document.createElement('th');
-      th.id='lvsort-custom-'+n;th.className='lvsort lvsort-custom';
-      th.style.cssText='padding:10px 14px;text-align:center;cursor:pointer;white-space:nowrap;font-weight:700;color:#374151';
-      th.innerHTML=n+' <span class="sort-arrow">\u2195</span>';
-      th.addEventListener('click',function(){_lvSortCol='custom-'+n;_lvSortDir*=-1;rLeaveBalanceTable(y);});
-      thead.insertBefore(th,totalTh);
-    }
-  });
   const tbody=q('lv-balance-tbody');
-  tbody.innerHTML=rows.map(r=>'<tr style="border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="openHistory(\''+r.s.id+'\');setTimeout(()=>switchHTab(\'leave\'),200)" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">'+
-    '<td style="padding:9px 14px;font-weight:600;white-space:nowrap"><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:26px;height:26px;font-size:11px;background:'+avbg(r.s.dept)+';color:'+avfg(r.s.dept)+'">'+(r.s.nn||'?')[0]+'</div>'+r.s.nn+' '+r.s.fn+'</div></td>'+
-    cell(r.annual,r.aAllow)+cell(r.sick,r.sAllow)+cell(r.business,r.bAllow)+
-    r.customUsed.map((u,i)=>cell(u,r.cAllow[i]?r.cAllow[i].days:0)).join('')+
-    '<td style="padding:9px 14px;text-align:center;font-weight:700;color:'+(r.total>0?'var(--nv)':'#9ca3af')+'">'+r.total+'d</td>'+
-  '</tr>').join('');
+  tbody.innerHTML=rows.map(r=>{
+    const proRataNote=r.proRata!==null?`<div style="font-size:10px;color:#3b82f6;margin-top:2px">📊 Pro-rata ${y}: ${r.proRata}d</div>`:'';
+    const resignNote=r.resignation&&r.resignation.excess>0?`<div style="font-size:10px;color:#e24b4a;margin-top:2px">⚠️ Used ${r.resignation.used}d / Earned ${r.resignation.earned}d</div>`:'';
+    return'<tr style="border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="openHistory(\''+r.s.id+'\');setTimeout(()=>switchHTab(\'leave\'),200)" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">'+
+      '<td style="padding:9px 14px;font-weight:600;white-space:nowrap"><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:26px;height:26px;font-size:11px;background:'+avbg(r.s.dept)+';color:'+avfg(r.s.dept)+'">'+(r.s.nn||'?')[0]+'</div>'+r.s.nn+' '+r.s.fn+proRataNote+resignNote+'</div></td>'+
+      cell(r.annual,r.aAllow)+
+      (r.carryover.days>0?cell(r.carryoverUsed,r.carryover.days,false,true,r.carryover.expired):'')+
+      cell(r.sick,r.sAllow)+
+      cell(r.business,r.bAllow)+
+      cell(r.lwop,r.lwopAllow,true)+
+      r.customUsed.map((u,i)=>cell(u,r.cAllow[i]?r.cAllow[i].days:0)).join('')+
+      '<td style="padding:9px 14px;text-align:center;font-weight:700;color:'+(r.total>0?'var(--nv)':'#9ca3af')+'">'+r.total+'d</td>'+
+    '</tr>';
+  }).join('');
 }
 
 function rLeaveDoneList(y){
@@ -2902,7 +2980,7 @@ function rLeaveDoneList(y){
   const list=q('lv-done-list');
   if(!done.length){list.innerHTML='<div class="card"><div class="no-data">No approved/rejected records for '+y+'</div></div>';return;}
   const stCol={approved:'#16a34a',rejected:'#e24b4a'};
-  const typeLabel={annual:'Annual',sick:'Sick',business:'Business',custom:'Other'};
+  const typeLabel={annual:'Annual',sick:'Sick',business:'Business',carryover:'Carryover',lwop:'LWOP (No Pay)',custom:'Other'};
   list.innerHTML=done.map(r=>{
     const s=S.find(x=>x.id===r.staffId);
     return'<div class="card" style="margin-bottom:8px;display:flex;gap:12px;align-items:flex-start;padding:12px 14px">'+
@@ -2971,7 +3049,7 @@ function calcLvDeduct(){
   if(!s||!days){q('lv-preview').style.display='none';return;}
   const y=from?parseInt(from.split('-')[0]):new Date().getFullYear();
   const allow=getLeaveAllowance(s);
-  const typeLabel={annual:'Annual',sick:'Sick',business:'Business',custom:qv('lv-custom-name')||'Other'};
+  const typeLabel={annual:'Annual',sick:'Sick',business:'Business',carryover:'Carryover',lwop:'LWOP (No Pay)',custom:qv('lv-custom-name')||'Other'};
   const allowDays=type==='annual'?allow.annual:type==='sick'?allow.sick:type==='business'?allow.business:(allow.custom.find(c=>c.name===qv('lv-custom-name'))||{days:0}).days;
   const used=getLeaveUsed(s.id,y,type,type==='custom'?qv('lv-custom-name'):null);
   const usedAfter=used+days;
@@ -3039,7 +3117,25 @@ async function notifyLeaveResult(staffId,leaveId,status,reason){
 function approveLeave(id){
   const r=LVR.find(x=>x.id===id);
   if(!r||r.status!=='pending')return;
-  r.status='approved';svLV();rLeavePage();
+  r.status='approved';
+  // LWOP — auto-deduct salary from that month's payroll
+  if(r.type==='lwop'){
+    const s=S.find(x=>x.id===r.staffId);
+    if(s&&s.emptype==='fulltime'){
+      const leaveYear=r.year||parseInt(r.from.split('-')[0]);
+      const leaveMonth=parseInt(r.from.split('-')[1]);
+      const key=mkKey(leaveMonth,leaveYear);
+      if(!P[key])P[key]={};
+      if(!P[key][r.staffId])P[key][r.staffId]={sid:r.staffId};
+      // Add LWOP days to leave days in that month's payroll
+      const existing=parseFloat(P[key][r.staffId].leaveDays)||0;
+      P[key][r.staffId].leaveDays=existing+r.days;
+      // Add note
+      P[key][r.staffId].lwopNote=(P[key][r.staffId].lwopNote||'')+`LWOP ${r.days}d (${r.from}). `;
+      svP();
+    }
+  }
+  svLV();rLeavePage();
   notifyLeaveResult(r.staffId,id,'approved','');
 }
 function rejectLeave(id){
@@ -3058,7 +3154,7 @@ function loadLeaveTab(sid){
   const bal=getLeaveBal(s,y);
   const recs=LVR.filter(r=>r.staffId===sid).sort((a,b)=>b.from.localeCompare(a.from));
   const stCol={approved:'#16a34a',pending:'#f59e0b',rejected:'#e24b4a'};
-  const typeLabel={annual:'Annual',sick:'Sick',business:'Business',custom:'Other'};
+  const typeLabel={annual:'Annual',sick:'Sick',business:'Business',carryover:'Carryover',lwop:'LWOP (No Pay)',custom:'Other'};
   let html='<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">Leave Balance '+y+'</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">'+
     bal.map(b=>'<div style="background:'+(b.excess>0?'#fee2e2':'#f0fdf4')+';border-radius:9px;padding:9px 12px;text-align:center">'+
