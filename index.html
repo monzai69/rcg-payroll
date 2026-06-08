@@ -2669,7 +2669,7 @@ function toggleSidebar(){
   localStorage.setItem('sb_collapsed',collapsed?'1':'0');
   // Show/hide the rescue button
   let rescue=document.getElementById('sb-rescue');
-  if(!rescue){rescue=document.createElement('button');rescue.id='sb-rescue';rescue.onclick=toggleSidebar;rescue.style.cssText='position:fixed;top:12px;left:8px;z-index:999;background:var(--nv);border:none;color:#fff;width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:18px;display:none';rescue.textContent='☰';document.body.appendChild(rescue);}
+  if(!rescue){rescue=document.createElement('button');rescue.id='sb-rescue';rescue.onclick=toggleSidebar;rescue.style.cssText='position:fixed;top:16px;left:8px;z-index:999;background:none;border:none;color:var(--nv);width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:14px;display:none;align-items:center;justify-content:center';rescue.textContent='☰';document.body.appendChild(rescue);}
   rescue.style.display=collapsed?'flex':'none';
 }
 
@@ -2764,7 +2764,7 @@ async function rejectDoc(docId){
     const main=document.querySelector('.main');
     if(sb)sb.classList.add('collapsed');
     if(main)main.classList.add('expanded');
-    const r=document.createElement('button');r.id='sb-rescue';r.onclick=toggleSidebar;r.style.cssText='position:fixed;top:14px;left:8px;z-index:999;background:var(--nv);border:none;color:rgba(255,255,255,.7);width:26px;height:26px;border-radius:5px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)';r.textContent='☰';document.body.appendChild(r);
+    const r=document.createElement('button');r.id='sb-rescue';r.onclick=toggleSidebar;r.style.cssText='position:fixed;top:16px;left:8px;z-index:999;background:none;border:none;color:var(--nv);width:22px;height:22px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center';r.textContent='☰';document.body.appendChild(r);
   }
 })();
 
@@ -2961,7 +2961,7 @@ function rLeaveBalanceTable(y){
     return'<tr style="border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="openHistory(\''+r.s.id+'\');setTimeout(()=>switchHTab(\'leave\'),200)" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">'+
       '<td style="padding:9px 14px;font-weight:600;white-space:nowrap"><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:26px;height:26px;font-size:11px;background:'+avbg(r.s.dept)+';color:'+avfg(r.s.dept)+'">'+(r.s.nn||'?')[0]+'</div>'+r.s.nn+' '+r.s.fn+proRataNote+resignNote+'</div></td>'+
       cell(r.annual,r.aAllow)+
-      (r.carryover.days>0?cell(r.carryoverUsed,r.carryover.days,false,true,r.carryover.expired):'')+
+      (r.carryover.days>0?cell(r.carryoverUsed,r.carryover.days,false,true,r.carryover.expired):'<td style="padding:9px 14px;text-align:center;color:#d1d5db;font-size:12px">—</td>')+
       cell(r.sick,r.sAllow)+
       cell(r.business,r.bAllow)+
       cell(r.lwop,r.lwopAllow,true)+
