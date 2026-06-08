@@ -2764,7 +2764,7 @@ async function rejectDoc(docId){
     const main=document.querySelector('.main');
     if(sb)sb.classList.add('collapsed');
     if(main)main.classList.add('expanded');
-    const r=document.createElement('button');r.id='sb-rescue';r.onclick=toggleSidebar;r.style.cssText='position:fixed;top:12px;left:8px;z-index:999;background:var(--nv);border:none;color:#fff;width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center';r.textContent='☰';document.body.appendChild(r);
+    const r=document.createElement('button');r.id='sb-rescue';r.onclick=toggleSidebar;r.style.cssText='position:fixed;top:14px;left:8px;z-index:999;background:var(--nv);border:none;color:rgba(255,255,255,.7);width:26px;height:26px;border-radius:5px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)';r.textContent='☰';document.body.appendChild(r);
   }
 })();
 
