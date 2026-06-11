@@ -489,9 +489,11 @@ window.cloudLoad=async()=>{
   </div>
   <div class="g2" style="gap:14px;margin-bottom:14px">
     <div class="card"><div class="st">Company Info</div>
-      <div class="fr"><label>Company Name</label><input id="c-cth" type="text"></div>
+      <div class="fr"><label>Company Name (Thai)</label><input id="c-cth" type="text"></div>
+      <div class="fr"><label>Company Name (English)</label><input id="c-cthen" type="text" placeholder="e.g. Ready Check Go Group Co., Ltd."></div>
       <div class="fr"><label>Address</label><textarea id="c-addr" rows="3"></textarea></div>
-      <div class="fr"><label>Authorized Signatory</label><input id="c-sgn" type="text"></div>
+      <div class="fr"><label>Authorized Signatory (Thai)</label><input id="c-sgn" type="text"></div>
+      <div class="fr"><label>Authorized Signatory (English)</label><input id="c-sgnen" type="text" placeholder="e.g. Smon Satitayangkul"></div>
       <button class="btn bp mt12" id="btn-scfg"><i class="ti ti-device-floppy"></i>Save</button>
     </div>
     <div class="card"><div class="st">Tax & SSO</div>
@@ -848,7 +850,8 @@ window.cloudLoad=async()=>{
 <div class="modal-overlay" id="bm">
 <div class="modal-box" style="width:460px">
   <div style="font-size:16px;font-weight:700;margin-bottom:15px;color:var(--nv)" id="bm-title">Add Branch</div>
-  <div class="fr"><label>Branch / Clinic Name</label><input id="b-name" type="text"></div>
+  <div class="fr"><label>Branch / Clinic Name (Thai)</label><input id="b-name" type="text"></div>
+  <div class="fr"><label>Branch / Clinic Name (English)</label><input id="b-nameen" type="text" placeholder="e.g. LIV Clinic (Samui Branch)"></div>
   <div class="fr"><label>Address</label><textarea id="b-addr" rows="2"></textarea></div>
   <div class="g2"><div class="fr"><label>License No.</label><input id="b-lic" type="text"></div><div class="fr"><label>Telephone</label><input id="b-tel" type="text"></div></div>
   <div class="fr"><label>Name on Certificate (if different)</label><input id="b-certname" type="text"></div>
@@ -2410,10 +2413,10 @@ area.innerHTML='<div class="dprev" id="cert-print">'+logoHtml+hdr+'<div style="t
 function doPrint(id){const el=document.getElementById(id);if(!el){alert('Please select a staff member first');return}const w=window.open('','_blank');w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet"><title>RCG</title><style>body{font-family:\'Sarabun\',sans-serif;padding:28px;font-size:13px;color:#1a1a2e;max-width:600px;margin:auto}.dr{display:flex;justify-content:space-between;padding:3px 0}.dr.tot{border-top:1.5px solid #374151;font-weight:700;margin-top:4px;padding-top:4px}@media print{@page{margin:18mm}body{padding:0}}</style></head><body>'+el.outerHTML+'<scr'+'ipt>window.onload=()=>setTimeout(()=>window.print(),500)<\/scr'+'ipt></body></html>');w.document.close();}
 
 function rBrCards(){q('branch-cards').innerHTML=B.map(b=>'<div class="branch-card"><div class="fx jb ic" style="margin-bottom:8px"><div style="font-weight:700;font-size:14px"><i class="ti ti-building" style="margin-right:7px;color:var(--nv)"></i>'+b.name+'</div><button class="btn bo bsm edit-br-btn" data-id="'+b.id+'"><i class="ti ti-edit"></i>Edit</button></div><div class="g2" style="font-size:12.5px;gap:7px;color:#6b7280">'+(b.addr?'<div>'+b.addr+'</div>':'<div>No address</div>')+'<div>'+(b.lic?'License: '+b.lic:'-')+(b.tel?' · '+b.tel:'')+'</div></div>'+(b.certname?'<div style="font-size:11.5px;color:#9ca3af;margin-top:4px">Cert: '+b.certname+'</div>':'')+'</div>').join('');document.querySelectorAll('.edit-br-btn').forEach(btn=>btn.addEventListener('click',function(){openBM(this.dataset.id);}));}
-function openBM(id){_eBid=id||null;q('btn-del-branch').style.display=id?'inline-flex':'none';if(id){const b=B.find(x=>x.id===id);if(!b)return;q('bm-title').textContent='Edit Branch';q('b-name').value=b.name||'';q('b-addr').value=b.addr||'';q('b-lic').value=b.lic||'';q('b-tel').value=b.tel||'';q('b-certname').value=b.certname||'';}else{q('bm-title').textContent='Add Branch';['b-name','b-addr','b-lic','b-tel','b-certname'].forEach(x=>q(x).value='');}openM('bm');}
+function openBM(id){_eBid=id||null;q('btn-del-branch').style.display=id?'inline-flex':'none';if(id){const b=B.find(x=>x.id===id);if(!b)return;q('bm-title').textContent='Edit Branch';q('b-name').value=b.name||'';q('b-nameen')&&(q('b-nameen').value=b.nameEn||'');q('b-addr').value=b.addr||'';q('b-lic').value=b.lic||'';q('b-tel').value=b.tel||'';q('b-certname').value=b.certname||'';}else{q('bm-title').textContent='Add Branch';['b-name','b-nameen','b-addr','b-lic','b-tel','b-certname'].forEach(x=>{const el=q(x);if(el)el.value='';});}openM('bm');}
 q('btn-abranch').addEventListener('click',()=>openBM(null));q('btn-cancel-branch').addEventListener('click',()=>closeM('bm'));
 q('btn-del-branch').addEventListener('click',()=>{if(!_eBid||!confirm('Delete?'))return;B=B.filter(b=>b.id!==_eBid);svB();closeM('bm');rBrCards();popBrDl();});
-q('btn-save-branch').addEventListener('click',()=>{const nb={id:_eBid||'br'+Date.now(),name:q('b-name').value.trim(),addr:q('b-addr').value.trim(),lic:q('b-lic').value.trim(),tel:q('b-tel').value.trim(),certname:q('b-certname').value.trim()};if(!nb.name){alert('Branch name required');return}if(_eBid){const i=B.findIndex(x=>x.id===_eBid);if(i>=0)B[i]=nb;else B.push(nb)}else B.push(nb);svB();closeM('bm');rBrCards();popBrDl();});
+q('btn-save-branch').addEventListener('click',()=>{const nb={id:_eBid||'br'+Date.now(),name:q('b-name').value.trim(),nameEn:q('b-nameen')&&q('b-nameen').value.trim()||'',addr:q('b-addr').value.trim(),lic:q('b-lic').value.trim(),tel:q('b-tel').value.trim(),certname:q('b-certname').value.trim()};if(!nb.name){alert('Branch name required');return}if(_eBid){const i=B.findIndex(x=>x.id===_eBid);if(i>=0)B[i]=nb;else B.push(nb)}else B.push(nb);svB();closeM('bm');rBrCards();popBrDl();});
 
 function addDept(){const v=q('new-dept').value.trim();if(!v||(C.depts||[]).some(d=>(typeof d==='object'?d.name:d)===v))return;C.depts.push({name:v,days:26,hrs:9});svC();q('new-dept').value='';rDeptChips();popDeptDl();}
 function delDept(d){if(!confirm('Delete "'+d+'"?'))return;C.depts=C.depts.filter(x=>(typeof x==='object'?x.name:x)!==d);svC();rDeptChips();popDeptDl();}
@@ -2443,8 +2446,8 @@ function addIname(){const v=q('new-iname').value.trim();if(!v||(C.itemNames||[])
 function delIname(n){C.itemNames=C.itemNames.filter(x=>x!==n);svC();rInameChips();}
 function rInameChips(){q('iname-chips').innerHTML=(C.itemNames||[]).map(n=>'<span class="chip">'+n+'<button onclick="delIname(\''+n.replace(/'/g,"\\'")+'\')">×</button></span>').join('');}
 q('btn-ainame').addEventListener('click',addIname);
-function ldCfg(){q('c-cth').value=C.cth||'';q('c-addr').value=C.addr||'';q('c-sgn').value=C.sgn||'';q('c-sso').value=C.sso||5;q('c-ssoc').value=C.ssoC||17500;q('c-wht').value=C.wht||3;q('c-d50').value=C.d50||100000;q('c-pers').value=C.pers||60000;}
-function saveCfg(){C.cth=q('c-cth').value;C.addr=q('c-addr').value;C.sgn=q('c-sgn').value;C.sso=parseFloat(q('c-sso').value)||5;C.ssoC=parseFloat(q('c-ssoc').value)||17500;C.wht=parseFloat(q('c-wht').value)||3;C.d50=parseFloat(q('c-d50').value)||100000;C.pers=parseFloat(q('c-pers').value)||60000;svC();alert('Saved ✓');}
+function ldCfg(){q('c-cth').value=C.cth||'';q('c-cthen')&&(q('c-cthen').value=C.cthen||'');q('c-addr').value=C.addr||'';q('c-sgn').value=C.sgn||'';q('c-sgnen')&&(q('c-sgnen').value=C.sgnen||'');q('c-sso').value=C.sso||5;q('c-ssoc').value=C.ssoC||17500;q('c-wht').value=C.wht||3;q('c-d50').value=C.d50||100000;q('c-pers').value=C.pers||60000;}
+function saveCfg(){C.cth=q('c-cth').value;C.cthen=q('c-cthen')&&q('c-cthen').value||'';C.addr=q('c-addr').value;C.sgn=q('c-sgn').value;C.sgnen=q('c-sgnen')&&q('c-sgnen').value||'';C.sso=parseFloat(q('c-sso').value)||5;C.ssoC=parseFloat(q('c-ssoc').value)||17500;C.wht=parseFloat(q('c-wht').value)||3;C.d50=parseFloat(q('c-d50').value)||100000;C.pers=parseFloat(q('c-pers').value)||60000;svC();alert('Saved ✓');}
 ['btn-scfg','btn-scfg2'].forEach(id=>q(id).addEventListener('click',saveCfg));
 
 /* ══════════════════ LOGO MANAGEMENT ══════════════════ */
