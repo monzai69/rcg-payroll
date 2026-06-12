@@ -2706,19 +2706,22 @@ async function loadDocRequests(){
     if(!all.length){list.innerHTML='<div class="no-data">No document requests yet</div>';return;}
     const typeLabel={payslip:'Pay Slip',cert:'Employment Certificate'};
     const stCol={pending:'#f59e0b',approved:'#16a34a',rejected:'#e24b4a'};
+    const fmtDate=iso=>{if(!iso)return'';try{const d=new Date(iso);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return'';}};
     const renderCard=(d,isPending)=>{
       const s=S.find(x=>x.id===d.staffId);
-      const br=B.find(x=>x.id===d.branchId);
+      const br=d.branchId?B.find(x=>x.id===d.branchId):null;
       const period=d.month&&d.year?MTH[parseInt(d.month)-1]+' '+d.year:'—';
-      return`<div class="card" style="margin-bottom:8px;border-left:3px solid ${stCol[d.status]};padding:12px 14px">
+      const dateStr=d.createdAt?`<div class="ts" style="color:#9ca3af;font-size:11px;margin-top:2px">📅 ${fmtDate(d.createdAt)}</div>`:'';
+      return`<div class="card" style="margin-bottom:8px;border-left:3px solid ${stCol[d.status]||'#9ca3af'};padding:12px 14px">
         <div class="fx jb ic" style="flex-wrap:wrap;gap:8px">
           <div class="fx ic g8" style="flex:1">
             <div class="av" style="width:34px;height:34px;font-size:13px;background:${avbg(s?s.dept:'')};color:${avfg(s?s.dept:'')}">${s?(s.nn||'?')[0]:'?'}</div>
             <div>
-              <div style="font-weight:700;font-size:13px">${s?s.nn+' '+s.fn:'?'}</div>
-              <div class="ts tm">${typeLabel[d.docType]||d.docType} · ${br?br.name:'?'} · ${period}</div>
+              <div style="font-weight:700;font-size:13px">${s?s.nn+' '+s.fn:'Unknown Staff'}</div>
+              <div class="ts tm">${typeLabel[d.docType]||d.docType||'—'} · ${br?br.name:'—'} · ${period}</div>
               ${d.showSalary===false?'<div class="ts tm">No salary shown</div>':''}
               ${d.note?`<div class="ts tm">📝 ${d.note}</div>`:''}
+              ${dateStr}
               ${d.downloadUrl?`<div style="margin-top:4px"><a href="${d.downloadUrl}" target="_blank" style="font-size:11px;color:var(--nv);font-weight:600">📥 View PDF</a></div>`:''}
             </div>
           </div>
@@ -2726,14 +2729,17 @@ async function loadDocRequests(){
             ${isPending?`
               <button class="btn bok bsm" onclick="approveDoc('${d.id}')"><i class="ti ti-check"></i>Approve</button>
               <button class="btn bx bsm" onclick="rejectDoc('${d.id}')"><i class="ti ti-x"></i>Reject</button>
-            `:`<span style="font-size:11px;font-weight:700;color:${stCol[d.status]};background:${stCol[d.status]}1a;padding:3px 10px;border-radius:20px">${d.status.toUpperCase()}</span>`}
+            `:`
+              <span style="font-size:11px;font-weight:700;color:${stCol[d.status]||'#9ca3af'};background:${stCol[d.status]||'#9ca3af'}1a;padding:3px 10px;border-radius:20px">${d.status.toUpperCase()}</span>
+              <button class="btn bx bsm" onclick="deleteDoc('${d.id}')" title="Delete" style="padding:4px 8px"><i class="ti ti-x"></i></button>
+            `}
           </div>
         </div>
       </div>`;
     };
     let html='';
     if(pending.length){html+='<div style="font-size:11px;font-weight:800;color:#f59e0b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">⏳ Pending ('+pending.length+')</div>';html+=pending.map(d=>renderCard(d,true)).join('');}
-    if(done.length){html+='<div style="font-size:11px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px">✅ Completed</div>';html+=done.slice(0,10).map(d=>renderCard(d,false)).join('');}
+    if(done.length){html+='<div style="font-size:11px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px">✅ Completed ('+done.length+')</div>';html+=done.map(d=>renderCard(d,false)).join('');}
     list.innerHTML=html;
   }catch(e){list.innerHTML='<div class="no-data">Error: '+e.message+'</div>';}
 }
@@ -2761,6 +2767,16 @@ async function rejectDoc(docId){
   loadDocRequests();
 }
 
+async function deleteDoc(docId){
+  if(!confirm('Delete this completed request permanently?'))return;
+  try{
+    const res=await fetch(LINE_SERVER+'/api/delete-document',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({docId})});
+    const data=await res.json();
+    if(!data.ok){alert('❌ Error: '+data.msg);return;}
+  }catch(e){alert('❌ Connection error: '+e.message);return;}
+  loadDocRequests();
+}
+
 // Restore sidebar state
 (function(){
   if(localStorage.getItem('sb_collapsed')==='1'){
@@ -2777,10 +2793,11 @@ async function rejectDoc(docId){
 // ── LEAVE ALLOWANCE HELPERS ──
 function getLeaveAllowance(s){
   const lv=s.leaveAllowance||{};
+  const isContract=s.ct==='contract'&&s.emptype==='fulltime';
   return{
-    annual:lv.annual!==undefined?lv.annual:6,
+    annual:isContract?0:(lv.annual!==undefined?lv.annual:6),
     sick:lv.sick!==undefined?lv.sick:30,
-    business:lv.business!==undefined?lv.business:3,
+    business:isContract?0:(lv.business!==undefined?lv.business:3),
     lwop:lv.lwop!==undefined?lv.lwop:5,
     carryover:lv.carryover!==undefined?lv.carryover:0, // manually set or auto-calculated
     custom:lv.custom||[]
@@ -2790,6 +2807,7 @@ function getLeaveAllowance(s){
 // Calculate pro-rata annual leave for first year
 function calcProRataAnnual(s, year){
   if(!s.sd||s.emptype!=='fulltime')return null;
+  if(s.ct==='contract')return null; // no annual leave entitlement
   const start=new Date(s.sd);
   const anniversary=new Date(start);
   anniversary.setFullYear(anniversary.getFullYear()+1);
@@ -2876,7 +2894,7 @@ function initLeaveSelectors(){
     [ny-1,ny,ny+1].forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y;if(y===ny)o.selected=true;ysel.appendChild(o);});
   }
   const ssel=q('lv-f-s');
-  if(ssel){ssel.innerHTML='<option value="">All Staff</option>'+S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht')&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');}
+  if(ssel){ssel.innerHTML='<option value="">All Staff</option>'+S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht'||(s.ct==='contract'&&s.emptype==='fulltime'))&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');}
   [q('lv-f-s'),q('lv-f-type'),q('lv-f-y')].forEach(el=>{if(el)el.onchange=rLeavePage;});
   document.querySelectorAll('.lvsort').forEach(th=>{
     th.addEventListener('click',function(){
@@ -2922,7 +2940,7 @@ function rLeavePending(){
 }
 
 function rLeaveBalanceTable(y){
-  const permStaff=S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht')&&(s.st==='Active'||s.st==='Resigned'));
+  const permStaff=S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht'||(s.ct==='contract'&&s.emptype==='fulltime'))&&(s.st==='Active'||s.st==='Resigned'));
   const customNames=[];
   permStaff.forEach(s=>{(getLeaveAllowance(s).custom||[]).forEach(c=>{if(!customNames.includes(c.name))customNames.push(c.name);});});
   let rows=permStaff.map(s=>{
@@ -2979,7 +2997,7 @@ function rLeaveDoneList(y){
   const sf=qv('lv-f-s'),tf=qv('lv-f-type');
   const done=LVR.filter(r=>{
     const s=S.find(x=>x.id===r.staffId);
-    return(r.status==='approved'||r.status==='rejected')&&r.year===y&&(!sf||r.staffId===sf)&&(!tf||r.type===tf)&&s&&(s.ct==='permanent'||s.ct==='permanent_wht');
+    return(r.status==='approved'||r.status==='rejected')&&r.year===y&&(!sf||r.staffId===sf)&&(!tf||r.type===tf)&&s&&(s.ct==='permanent'||s.ct==='permanent_wht'||(s.ct==='contract'&&s.emptype==='fulltime'));
   }).sort((a,b)=>b.from.localeCompare(a.from));
   const list=q('lv-done-list');
   if(!done.length){list.innerHTML='<div class="card"><div class="no-data">No approved/rejected records for '+y+'</div></div>';return;}
@@ -2993,7 +3011,7 @@ function rLeaveDoneList(y){
         '<div style="font-weight:700;font-size:13px;margin-bottom:2px">'+(s?s.nn+' '+s.fn:'?')+'</div>'+
         '<div style="font-size:12px;color:#6b7280">'+(typeLabel[r.type]||r.type)+(r.customName?' \u2014 '+r.customName:'')+' \u00b7 '+r.days+' day(s) \u00b7 '+r.from+(r.to&&r.to!==r.from?' \u2192 '+r.to:'')+'</div>'+
         (r.reason?'<div style="font-size:11px;color:#9ca3af;margin-top:2px">'+r.reason+'</div>':'')+
-        (r.cert?'<div style="margin-top:6px"><img src="'+r.cert+'" style="max-height:50px;border-radius:6px;cursor:pointer" onclick="window.open(this.src)"></div>':'')+
+        ((r.cert||r.medCertUrl)?'<div style="margin-top:6px"><img src="'+(r.medCertUrl||r.cert)+'" style="max-height:60px;border-radius:6px;cursor:pointer;border:1px solid #e5e7eb" onclick="window.open(this.src)" title="Med Cert — click to view full size"></div>':'')+
       '</div>'+
       '<div class="fx g8 ic">'+
         '<span style="font-size:11px;font-weight:700;color:'+stCol[r.status]+';background:'+stCol[r.status]+'1a;padding:3px 10px;border-radius:20px;white-space:nowrap">'+r.status.toUpperCase()+'</span>'+
@@ -3011,7 +3029,7 @@ function openAddLeave(){
   _eLvId=null;_lvCertData=null;
   q('lvm-title').textContent='Add Leave Record';
   q('btn-del-leave').style.display='none';
-  q('lv-s').innerHTML='<option value="">-- Select --</option>'+S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht')&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');
+  q('lv-s').innerHTML='<option value="">-- Select --</option>'+S.filter(s=>(s.ct==='permanent'||s.ct==='permanent_wht'||(s.ct==='contract'&&s.emptype==='fulltime'))&&s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');
   q('lv-type').value='annual';q('lv-from').value='';q('lv-to').value='';
   q('lv-days').value='';q('lv-half').value='full';q('lv-reason').value='';
   q('lv-status').value='approved';q('lv-custom-row').style.display='none';
