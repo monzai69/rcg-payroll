@@ -1652,15 +1652,43 @@ async function loadHistoryTab(sid){
   }
 }
 
+function isPayrollLocked(m,y){
+  // Period locks on the 2nd day of the following month
+  const today=new Date();
+  const lockDate=new Date(y,m,2); // month is 0-based in JS, so m (1-based) = next month
+  return today>=lockDate;
+}
+
 function rPay(){
   // Update period label in Quick Jump
   const _pm=parseInt(qv('pm')),_py=parseInt(qv('py'));
   const _lbl=document.getElementById('jump-period');
   if(_lbl)_lbl.textContent=MTH[_pm-1]+' '+_py;
   const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);if(!P[key])P[key]={};
+  const locked=isPayrollLocked(m,y);
+  // Show/hide lock banner
+  let lockBanner=q('pay-lock-banner');
+  if(!lockBanner){
+    lockBanner=document.createElement('div');
+    lockBanner.id='pay-lock-banner';
+    const topbar=q('pay-topbar');
+    topbar&&topbar.parentNode.insertBefore(lockBanner,topbar);
+  }
+  if(locked){
+    lockBanner.style.cssText='background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#991b1b';
+    lockBanner.innerHTML='🔒 This period is locked — payroll for '+MTH[m-1]+' '+y+' cannot be edited (locked after 1st of next month).';
+    q('btn-saveall').disabled=true;
+    q('btn-saveall').style.opacity='0.4';
+    q('btn-saveall').style.cursor='not-allowed';
+  }else{
+    lockBanner.style.display='none';
+    q('btn-saveall').disabled=false;
+    q('btn-saveall').style.opacity='';
+    q('btn-saveall').style.cursor='';
+  }
   const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');
   if(!act.length){q('pay-cards').innerHTML='<div class="no-data">No full-time / full-part-time staff</div>';return}
-  q('pay-cards').innerHTML=act.map(s=>{const e=P[key][s.id]||{sid:s.id,rev:0,mkt:0,otHrs:0,bonus:0,dLa:0,dOth:0,hours:0,days:0,periodic:{},diligence:{}};return buildCard(s,e,key)}).join('');
+  q('pay-cards').innerHTML=act.map(s=>{const e=P[key][s.id]||{sid:s.id,rev:0,mkt:0,otHrs:0,bonus:0,dLa:0,dOth:0,hours:0,days:0,periodic:{},diligence:{}};return buildCard(s,e,key,locked)}).join('');
   updTopbar(act,key);updJump(act,key);
 }
 q('pm').addEventListener('change',rPay);q('py').addEventListener('change',rPay);
@@ -1823,7 +1851,8 @@ function applyCSVImport(){
   if(status){status.style.display='block';status.style.color='#16a34a';status.textContent='✅ Imported '+applied+' staff from CSV';setTimeout(()=>status.style.display='none',4000);}
 }
 
-function buildCard(s,e,key){
+function buildCard(s,e,key,locked){
+  const dis=locked?'disabled':'';
   const c=calcM(s,e,key),isFPT=s.emptype==='fullparttime';
   const hasRev=(s.items||[]).some(i=>['comm_flat','comm_tiered','comm_tiered_fixed'].includes(i.type));
   const hasMkt=(s.items||[]).some(i=>i.type==='pct_rev');
@@ -1842,23 +1871,23 @@ function buildCard(s,e,key){
   let inc='<div class="income-grid">';
   if(isFPT){
     const isD=s.fptmethod==='daily';
-    inc+='<div class="fbox fpt"><label>'+(isD?'📅 Days':'🕐 Hours')+'</label><input type="number" id="pr-'+(isD?'days':'hrs')+'-'+s.id+'" value="'+(isD?(e.days||''):(e.hours||''))+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';
-    if(hasRev)inc+='<div class="fbox rev"><label>📊 Revenue</label><input type="number" id="pr-rev-'+s.id+'" value="'+(e.rev||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';
-    if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';
-    if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs"></div>';
-    inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';
-    perIt.forEach(i=>{inc+='<div class="fbox rev"><label>🤝 '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';});
+    inc+='<div class="fbox fpt"><label>'+(isD?'📅 Days':'🕐 Hours')+'</label><input type="number" id="pr-'+(isD?'days':'hrs')+'-'+s.id+'" value="'+(isD?(e.days||''):(e.hours||''))+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';
+    if(hasRev)inc+='<div class="fbox rev"><label>📊 Revenue</label><input type="number" id="pr-rev-'+s.id+'" value="'+(e.rev||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';
+    if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';
+    if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs" '+dis+'></div>';
+    inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';
+    perIt.forEach(i=>{inc+='<div class="fbox rev"><label>🤝 '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';});
   }
-  else{if(hasRev)inc+='<div class="fbox rev"><label>📊 Revenue</label><input type="number" id="pr-rev-'+s.id+'" value="'+(e.rev||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';perIt.forEach(i=>{inc+='<div class="fbox rev"><label>🤝 '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';});if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs"></div>';inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>';}
+  else{if(hasRev)inc+='<div class="fbox rev"><label>📊 Revenue</label><input type="number" id="pr-rev-'+s.id+'" value="'+(e.rev||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';perIt.forEach(i=>{inc+='<div class="fbox rev"><label>🤝 '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';});if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs" '+dis+'></div>';inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';}
   inc+='</div>';
-  let dil='';if(dilIt.length){dil='<div style="margin-bottom:12px">';dilIt.forEach(it=>{const on=e.diligence&&e.diligence[it.id];dil+='<div class="toggle-row'+(on?' on':'')+'" id="dr-'+s.id+'-'+it.id+'"><div><div style="font-size:13px;font-weight:600">'+it.name+'</div><div class="ts tm">'+fmt(it.val)+' ฿ · paid when criteria met</div></div><label class="switch"><input type="checkbox" '+(on?'checked':'')+' onchange="togDil(\''+s.id+'\',\''+it.id+'\',\''+key+'\',this)"><span class="slider"></span></label></div>';});dil+='</div>';}
+  let dil='';if(dilIt.length){dil='<div style="margin-bottom:12px">';dilIt.forEach(it=>{const on=e.diligence&&e.diligence[it.id];dil+='<div class="toggle-row'+(on?' on':'')+(locked?' locked-row':'')+'" id="dr-'+s.id+'-'+it.id+'"><div><div style="font-size:13px;font-weight:600">'+it.name+'</div><div class="ts tm">'+fmt(it.val)+' ฿ · paid when criteria met</div></div><label class="switch"><input type="checkbox" '+(on?'checked':'')+' onchange="togDil(\''+s.id+'\',\''+it.id+'\',\''+key+'\',this)" '+(locked?'disabled':'')+' style="pointer-events:'+(locked?'none':'auto')+'"><span class="slider"></span></label></div>';});dil+='</div>';}
   const ded='<div class="income-grid">'+
     '<div class="fbox ded"><label>📋 Leave Days <span style="font-weight:400;text-transform:none;font-size:10px" id="dept-days-'+s.id+'"></span></label>'+
-    '<input type="number" id="pr-ldays-'+s.id+'" value="'+(e.leaveDays||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" step="0.5"></div>'+
+    '<input type="number" id="pr-ldays-'+s.id+'" value="'+(e.leaveDays||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" step="0.5" '+dis+'></div>'+
     '<div class="fbox ded"><label>⏰ Leave Hours</label>'+
-    '<input type="number" id="pr-lhrs-'+s.id+'" value="'+(e.leaveHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" step="0.5"></div>'+
+    '<input type="number" id="pr-lhrs-'+s.id+'" value="'+(e.leaveHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" step="0.5" '+dis+'></div>'+
     '<div class="fbox ded" style="grid-column:span 2"><label>📋 Leave Deduction (auto-calculated) <span style="color:#e24b4a;font-weight:600" id="leave-preview-'+s.id+'">'+(c.dL>0?'− '+fmt(c.dL)+' ฿ ('+fmt(c.dailyRate)+' ฿/day · '+fmt(c.hourlyRate)+' ฿/hr)':'Enter days/hours above')+'</span></label></div>'+
-    '<div class="fbox ded"><label>➖ Other Deductions (กยศ.)</label><input type="number" id="pr-doth-'+s.id+'" value="'+(e.dOth||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0"></div>'+
+    '<div class="fbox ded"><label>➖ Other Deductions (กยศ.)</label><input type="number" id="pr-doth-'+s.id+'" value="'+(e.dOth||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>'+
     '</div>';
   return'<div class="spc'+(done?' done':'')+'" id="spc-'+s.id+'"><div class="spc-head"><div class="av" style="width:36px;height:36px;font-size:14px;background:'+avbg(s.dept)+';color:'+avfg(s.dept)+'">'+(s.nn||'?')[0]+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+s.nn+' '+s.fn+(done?' <i class="ti ti-circle-check" style="color:var(--ok);font-size:17px"></i>':'')+'</div><div class="ts tm">'+s.dept+' · '+brN(s.br)+'</div></div><div style="text-align:right;margin-right:8px"><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase">Net Pay</div><div style="font-size:20px;font-weight:800;color:var(--nv)" id="snet-'+s.id+'">'+fmt(c.net)+' ฿</div></div>'+empBadge(s)+' '+tx+'</div><div class="spc-body">'+advBanner+'<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px"><i class="ti ti-plus" style="font-size:12px"></i> Income</div>'+inc+(dilIt.length?'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-toggle-right" style="font-size:12px"></i> เบี้ยขยัน</div>'+dil:'')+'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;margin-top:4px"><i class="ti ti-minus" style="font-size:12px"></i> Deductions</div>'+ded+'<div id="acct-'+s.id+'">'+buildAcct(s,c)+'</div>'+build6mBlock(s,key)+'</div></div>';
 }
@@ -1883,20 +1912,27 @@ function buildAcct(s,c){
   if(c.dO>0)h+='<div class="ar ded"><span class="lbl">Other</span><span class="amt">−'+fmt(c.dO)+' ฿</span></div>';
   h+='<div class="ar net"><span class="lbl">NET PAY</span><span class="amt">'+fmt(c.net)+' ฿</span></div></div>';
   if(s.ct==='permanent'&&c.aT>0)h+='<div style="font-size:10px;color:#9ca3af;text-align:right;margin-top:4px">Est. annual tax: '+fmt(c.aT)+' ฿</div>';
-  // Save & Copy button
-  h+='<div style="text-align:right;margin-top:10px"><button onclick="saveAndCopy(\''+s.id+'\')" id="cpybtn-'+s.id+'" style="display:inline-flex;align-items:center;gap:6px;background:#1e3a5f;color:#fff;border:1.5px solid #1e3a5f;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background=\'#1a3a5c\'" onmouseout="this.style.background=\'#1e3a5f\'"><i class="ti ti-device-floppy" style="font-size:14px"></i>Save & Copy</button></div>';
+  // Save & Copy button — hidden for locked periods
+  const _m=parseInt(qv('pm')),_y=parseInt(qv('py'));
+  if(!isPayrollLocked(_m,_y)){
+    h+='<div style="text-align:right;margin-top:10px"><button onclick="saveAndCopy(\''+s.id+'\')" id="cpybtn-'+s.id+'" style="display:inline-flex;align-items:center;gap:6px;background:#1e3a5f;color:#fff;border:1.5px solid #1e3a5f;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background=\'#1a3a5c\'" onmouseout="this.style.background=\'#1e3a5f\'"><i class="ti ti-device-floppy" style="font-size:14px"></i>Save & Copy</button></div>';
+  }
   return h;
 }
 
 function saveAndCopy(sid){
   // Save this staff's data first
   const key=mkKey(parseInt(qv('pm')),parseInt(qv('py')));
+  const m=parseInt(qv('pm')),y=parseInt(qv('py'));
+  if(isPayrollLocked(m,y)){alert('🔒 This period is locked and cannot be edited.');return;}
   const s=S.find(x=>x.id===sid);if(!s)return;
   if(!P[key])P[key]={};
   const e=gatherE(sid);
   if(P[key][sid]&&P[key][sid].diligence)e.diligence=P[key][sid].diligence;
-  if(P[key][sid]&&P[key][sid].snap)e.snap=P[key][sid].snap;
-  if(!e.snap){e.snap={base:s.base||0,hrrate:s.hrrate||0,fptdayrate:s.fptdayrate||0,otrate:s.otrate||0,ct:s.ct,emptype:s.emptype,fptmethod:s.fptmethod||'hourly',items:JSON.parse(JSON.stringify(s.items||[]))};}
+  // Reuse existing snap ONLY if contract type hasn't changed — if ct changed, rebuild snap
+  const existingSnap=P[key][sid]&&P[key][sid].snap;
+  if(existingSnap&&existingSnap.ct===s.ct){e.snap=existingSnap;}
+  else{e.snap={base:s.base||0,hrrate:s.hrrate||0,fptdayrate:s.fptdayrate||0,otrate:s.otrate||0,ct:s.ct,emptype:s.emptype,fptmethod:s.fptmethod||'hourly',items:JSON.parse(JSON.stringify(s.items||[]))};}
   const c=calcM(s,e,key);e.net=c.net;
   P[key][sid]=e;svP();
   // Then copy summary
@@ -2185,6 +2221,7 @@ function togglePaid(sid,key,cb){
 }
 function saveAll(){
   const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);
+  if(isPayrollLocked(m,y)){alert('🔒 This period is locked and cannot be edited.');return;}
   if(!P[key])P[key]={};
   S.filter(s=>s.st==='Active'&&s.emptype!=='parttime').forEach(s=>{
     const e=gatherE(s.id);
