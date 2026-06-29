@@ -1920,6 +1920,34 @@ function buildAcct(s,c){
   return h;
 }
 
+function buildPayRows(s,c){
+  const rows=[];
+  // Base label
+  let baseLabel='Base Salary';
+  if(s.emptype==='fullparttime'){baseLabel=s.fptmethod==='daily'?(c.leaveDays+'d × '+fmt(s.fptdayrate)+'฿'):(c.leaveHrs+'hrs × '+fmt(s.hrrate)+'฿');}
+  rows.push({label:baseLabel,amt:c.bG,type:'income'});
+  if(c.dL>0){
+    rows.push({label:'Leave − Base ('+fmt(c.leaveDays)+'d '+fmt(c.leaveHrs)+'hrs)',amt:-c.dLbase,type:'ded'});
+    if(c.dLitems>0)rows.push({label:'Leave − Fixed Items',amt:-c.dLitems,type:'ded'});
+  }
+  c.rows.forEach(r=>{if(!r.isDiligence)rows.push({label:r.name+(r.isWHT?' (after WHT)':''),amt:r.net,type:'income'});});
+  if(c.otA>0)rows.push({label:'OT ('+c.otH+'hrs)',amt:c.otA,type:'income'});
+  if(c.bon>0)rows.push({label:'Bonus',amt:c.bon,type:'income'});
+  // Diligence items
+  c.rows.forEach(r=>{if(r.isDiligence)rows.push({label:r.name,amt:r.net,type:'income'});});
+  rows.push({label:'Gross Income',amt:c.gross,type:'sub'});
+  if(s.ct==='permanent'||s.ct==='permanent_wht'){
+    if(c.sso>0)rows.push({label:'SSO (5% × '+fmt(c.effBase||c.bG)+'฿)',amt:-c.sso,type:'ded'});
+    if(c.mT>0)rows.push({label:'Income Tax ภงด.1',amt:-c.mT,type:'ded'});
+  } else {
+    if(c.whtD>0)rows.push({label:'WHT 3%',amt:-c.whtD,type:'ded'});
+  }
+  if(c.adv>0)rows.push({label:'Advance'+(c.advIsInst?' (installment)':''),amt:-c.adv,type:'ded'});
+  if(c.dO>0)rows.push({label:'Other Deductions',amt:-c.dO,type:'ded'});
+  rows.push({label:'NET PAY',amt:c.net,type:'net'});
+  return rows;
+}
+
 function saveAndCopy(sid){
   // Save this staff's data first
   const key=mkKey(parseInt(qv('pm')),parseInt(qv('py')));
@@ -1933,7 +1961,7 @@ function saveAndCopy(sid){
   const existingSnap=P[key][sid]&&P[key][sid].snap;
   if(existingSnap&&existingSnap.ct===s.ct){e.snap=existingSnap;}
   else{e.snap={base:s.base||0,hrrate:s.hrrate||0,fptdayrate:s.fptdayrate||0,otrate:s.otrate||0,ct:s.ct,emptype:s.emptype,fptmethod:s.fptmethod||'hourly',items:JSON.parse(JSON.stringify(s.items||[]))};}
-  const c=calcM(s,e,key);e.net=c.net;
+  const c=calcM(s,e,key);e.net=c.net;e.payRows=buildPayRows(s,c);
   P[key][sid]=e;svP();
   // Then copy summary
   copyPaySummary(sid);
@@ -2237,7 +2265,7 @@ function saveAll(){
       fptmethod:s.fptmethod||'hourly',
       items:JSON.parse(JSON.stringify(s.items||[]))
     };
-    const c=calcM(s,e,key);e.net=c.net;P[key][s.id]=e;
+    const c=calcM(s,e,key);e.net=c.net;e.payRows=buildPayRows(s,c);P[key][s.id]=e;
     if(c.adv>0){
       A.forEach(a=>{
         if(a.staffId===s.id&&a.key===key&&a.status==='pending'&&a.installment>0){
