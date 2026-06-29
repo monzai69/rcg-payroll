@@ -1157,10 +1157,15 @@ function rDash(){
       const c2=calcM(s,e2,key);
       brTotal+=c2.net;
       const isPaid=!!paidMap[s.id];
+      const isConfirmed=!!e2.confirmed;
+      const confirmedBadge=isConfirmed
+        ?'<span style="font-size:10px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:20px;padding:1px 7px;margin-left:6px">✅ confirmed</span>'
+        :'<span style="font-size:10px;color:#9ca3af;margin-left:6px">⏳</span>';
       staffRows+='<div class="fx jb ic" style="padding:5px 0;border-bottom:1px solid #f9fafb">'+
         '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;flex:1">'+
           '<input type="checkbox" '+(isPaid?'checked':'')+' onchange="togglePaid(\''+s.id+'\',\''+key+'\',this)" style="width:15px;height:15px;accent-color:var(--ok);cursor:pointer">'+
           '<span style="font-size:12px;color:'+(isPaid?'#9ca3af':'#374151')+';text-decoration:'+(isPaid?'line-through':'none')+'">'+s.nn+' '+s.fn+'</span>'+
+          confirmedBadge+
         '</label>'+
         '<span style="font-size:12px;font-weight:700;color:'+(c2.net>0?(isPaid?'#9ca3af':'#1a1a2e'):'#9ca3af')+'">'+fmt(c2.net)+' ฿</span>'+
       '</div>';
@@ -1184,7 +1189,13 @@ function rDash(){
     grandTotal+=brTotal;
     psHtml+='<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e5e7eb">🏥 Other</div>'+staffRows+'<div class="fx jb ic" style="padding:6px 0 2px;margin-top:3px"><span style="font-size:12px;font-weight:700">Total</span><span style="font-size:13px;font-weight:800;color:var(--nv)">'+fmt(brTotal)+' ฿</span></div></div>';
   }
-  psHtml+='<div style="background:var(--nv);border-radius:9px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span style="font-size:13px;font-weight:700;color:#fff">💰 Grand Total</span><span style="font-size:16px;font-weight:800;color:#fde68a">'+fmt(grandTotal)+' ฿</span></div>';
+  const totalStaff=act2.length;
+  const confirmedCount=act2.filter(s=>(P[key]&&P[key][s.id]&&P[key][s.id].confirmed)).length;
+  const confirmSummary=`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f0fdf4;border-radius:8px;margin-bottom:10px;border:1px solid #bbf7d0">
+    <span style="font-size:12px;font-weight:600;color:#16a34a">✅ Staff Confirmed</span>
+    <span style="font-size:13px;font-weight:800;color:#16a34a">${confirmedCount} / ${totalStaff}</span>
+  </div>`;
+  psHtml+=confirmSummary+'<div style="background:var(--nv);border-radius:9px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span style="font-size:13px;font-weight:700;color:#fff">💰 Grand Total</span><span style="font-size:16px;font-weight:800;color:#fde68a">'+fmt(grandTotal)+' ฿</span></div>';
   q('dash-ps').innerHTML=psHtml||'<div class="no-data">No payroll data yet</div>';
 }
 q('dash-pm').addEventListener('change',rDash);q('dash-py').addEventListener('change',rDash);q('dash-rev-dept').addEventListener('change',rDash);
