@@ -2143,6 +2143,26 @@ function build6mBlock(s,key){
   if(isPayMonth){
     const storedMkt=P[key]&&P[key][s.id]&&P[key][s.id]['_6mmkt']!==undefined?P[key][s.id]['_6mmkt']:'';
     const mktVal=parseFloat(storedMkt)||0;
+    // Build per-month revenue table with overrides
+    const thYear=isPayJan?(y-1):y;
+    let accumulated=0,monthCount=0;
+    const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let monthRowsHtml='';
+    cycleMonths.forEach(cm=>{
+      const ck=mkKey(cm,isPayJan?(y-1):y);
+      const ep=P[ck]&&P[ck][s.id];
+      const autoRv=ep?parseFloat(ep.rev)||0:0;
+      const overrideKey='_6mrev_'+cm;
+      const storedOverride=P[key]&&P[key][s.id]&&P[key][s.id][overrideKey]!==undefined?P[key][s.id][overrideKey]:null;
+      const useVal=storedOverride!==null?parseFloat(storedOverride)||0:autoRv;
+      if(useVal>0){accumulated+=useVal;monthCount++;}
+      const mn=monthNames[cm-1]+' '+thYear;
+      monthRowsHtml+=`<tr>
+        <td style="padding:4px 8px;font-size:12px;color:#78350f;white-space:nowrap">${mn}</td>
+        <td style="padding:4px 8px;font-size:12px;color:#b45309;text-align:right">${autoRv>0?fmt(autoRv):'—'}</td>
+        <td style="padding:4px 4px"><input type="number" id="6mrev-${s.id}-${cm}" value="${storedOverride!==null?parseFloat(storedOverride)||'':autoRv||''}" placeholder="${autoRv||0}" style="width:110px;padding:3px 6px;border:1px solid #fcd34d;border-radius:5px;font-size:12px;background:#fffbeb;color:#78350f;text-align:right" oninput="upd6mCalc('${s.id}','${key}')"></td>
+      </tr>`;
+    });
     const netRev=Math.max(0,accumulated-mktVal);
     const incentiveAmt=calc6mTiered(netRev,i6.tiers);
     const tierBreakdown=(i6.tiers||[]).map(t=>'฿'+fmt(t.f)+'–'+(t.t===9999999?'∞':'฿'+fmt(t.t))+' → '+t.r+'%').join(' · ');
@@ -2150,8 +2170,16 @@ function build6mBlock(s,key){
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
       '<div style="font-size:12px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.5px">🏆 '+label+' — PAYOUT</div>'+
       '<div style="font-size:10px;color:#b45309">'+cycleLabel+' · '+payLabel+'</div></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:12px;color:#78350f;margin-bottom:4px"><span>Accumulated Revenue ('+monthCount+'/6 months)</span><span style="font-weight:700">'+fmt(accumulated)+' ฿</span></div>'+
       '<div style="font-size:11px;color:#b45309;margin-bottom:8px">Tiers: '+tierBreakdown+'</div>'+
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:10px;background:#fffde7;border-radius:8px;overflow:hidden">'+
+      '<thead><tr style="background:#fef3c7">'+
+      '<th style="padding:5px 8px;font-size:11px;color:#92400e;text-align:left;font-weight:700">Month</th>'+
+      '<th style="padding:5px 8px;font-size:11px;color:#92400e;text-align:right;font-weight:700">Auto (from payroll)</th>'+
+      '<th style="padding:5px 8px;font-size:11px;color:#92400e;text-align:right;font-weight:700">Override ✏️</th>'+
+      '</tr></thead><tbody>'+monthRowsHtml+'</tbody>'+
+      '<tfoot><tr style="background:#fef3c7"><td colspan="2" style="padding:5px 8px;font-size:12px;font-weight:700;color:#78350f">Accumulated ('+monthCount+'/6 months)</td>'+
+      '<td style="padding:5px 8px;font-size:12px;font-weight:700;color:#92400e;text-align:right">'+fmt(accumulated)+' ฿</td></tr></tfoot>'+
+      '</table>'+
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+
       '<label style="font-size:12px;color:#78350f;white-space:nowrap;font-weight:600">MKT Cost Deduction (฿):</label>'+
       '<input type="number" id="6m-mkt-'+s.id+'" value="'+(mktVal||'')+'" placeholder="0" style="flex:1;padding:5px 8px;border:1px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb;color:#78350f" oninput="upd6mCalc(\''+s.id+'\',\''+key+'\')">'+
@@ -2182,18 +2210,28 @@ function upd6mCalc(sid,key){
   const s=S.find(x=>x.id===sid);if(!s||!s.incentive6m)return;
   const mktInput=q('6m-mkt-'+sid);
   const mktVal=parseFloat(mktInput?mktInput.value:0)||0;
-  // Save MKT to entry
   if(!P[key])P[key]={};if(!P[key][sid])P[key][sid]={sid};
-  P[key][sid]['_6mmkt']=mktVal;svP();
-  // Recalculate
+  P[key][sid]['_6mmkt']=mktVal;
+  // Save per-month overrides
+  const [y,m]=[parseInt(key.split('_')[0]),parseInt(key.split('_')[1])];
+  const isPayJan=(m===1);
   const cycle=s.incentive6m.cycle||1;
-  const cycleMonths=cycle===1?[1,2,3,4,5,6]:[7,8,9,10,11,12];
+  const cycleMonths=m<=6?[1,2,3,4,5,6]:[7,8,9,10,11,12];
+  cycleMonths.forEach(cm=>{
+    const inp=q('6mrev-'+sid+'-'+cm);
+    if(inp!==null){P[key][sid]['_6mrev_'+cm]=inp.value===''?null:parseFloat(inp.value)||0;}
+  });
+  svP();
+  // Recalculate accumulated using overrides
   let accumulated=0;
   cycleMonths.forEach(cm=>{
-    const ck=mkKey(cm,cycle===1?parseInt(key.split('_')[0]):(cm>=7?parseInt(key.split('_')[0]):parseInt(key.split('_')[0])+1));
+    const ck=mkKey(cm,isPayJan?(y-1):y);
     const ep=P[ck]&&P[ck][sid];
-    const rv=ep?parseFloat(ep.rev)||0:0;const mk=ep?parseFloat(ep.mkt)||0:0;
-    if(rv>0)accumulated+=(rv-mk);
+    const autoRv=ep?parseFloat(ep.rev)||0:0;
+    const overrideKey='_6mrev_'+cm;
+    const storedOverride=P[key][sid][overrideKey];
+    const useVal=storedOverride!==null&&storedOverride!==undefined?parseFloat(storedOverride)||0:autoRv;
+    if(useVal>0)accumulated+=useVal;
   });
   const netRev=Math.max(0,accumulated-mktVal);
   const amt=calc6mTiered(netRev,s.incentive6m.tiers);
@@ -2206,15 +2244,18 @@ function apply6mPayout(sid,key){
   const s=S.find(x=>x.id===sid);if(!s||!s.incentive6m)return;
   const mktInput=q('6m-mkt-'+sid);
   const mktVal=parseFloat(mktInput?mktInput.value:0)||0;
-  const cycle=s.incentive6m.cycle||1;
-  const cycleMonths=cycle===1?[1,2,3,4,5,6]:[7,8,9,10,11,12];
+  const [y,m]=[parseInt(key.split('_')[0]),parseInt(key.split('_')[1])];
+  const isPayJan=(m===1);
+  const cycleMonths=m<=6?[1,2,3,4,5,6]:[7,8,9,10,11,12];
   let accumulated=0;
-  const y=parseInt(key.split('_')[0]);
   cycleMonths.forEach(cm=>{
-    const ck=mkKey(cm,cycle===1?y:(cm>=7?y:y+1));
+    const ck=mkKey(cm,isPayJan?(y-1):y);
     const ep=P[ck]&&P[ck][sid];
-    const rv=ep?parseFloat(ep.rev)||0:0;const mk=ep?parseFloat(ep.mkt)||0:0;
-    if(rv>0)accumulated+=(rv-mk);
+    const autoRv=ep?parseFloat(ep.rev)||0:0;
+    const overrideKey='_6mrev_'+cm;
+    const storedOverride=P[key]&&P[key][sid]&&P[key][sid][overrideKey]!==undefined?P[key][sid][overrideKey]:null;
+    const useVal=storedOverride!==null?parseFloat(storedOverride)||0:autoRv;
+    if(useVal>0)accumulated+=useVal;
   });
   const netRev=Math.max(0,accumulated-mktVal);
   const amt=calc6mTiered(netRev,s.incentive6m.tiers);
