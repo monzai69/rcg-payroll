@@ -2157,11 +2157,12 @@ function build6mBlock(s,key){
       const useVal=storedOverride!==null?parseFloat(storedOverride)||0:autoRv;
       if(useVal>0){accumulated+=useVal;monthCount++;}
       const mn=monthNames[cm-1]+' '+thYear;
-      monthRowsHtml+=`<tr>
-        <td style="padding:4px 8px;font-size:12px;color:#78350f;white-space:nowrap">${mn}</td>
-        <td style="padding:4px 8px;font-size:12px;color:#b45309;text-align:right">${autoRv>0?fmt(autoRv):'—'}</td>
-        <td style="padding:4px 4px"><input type="number" id="6mrev-${s.id}-${cm}" value="${storedOverride!==null?parseFloat(storedOverride)||'':autoRv||''}" placeholder="${autoRv||0}" style="width:110px;padding:3px 6px;border:1px solid #fcd34d;border-radius:5px;font-size:12px;background:#fffbeb;color:#78350f;text-align:right" oninput="upd6mCalc('${s.id}','${key}')"></td>
-      </tr>`;
+      const inputVal=storedOverride!==null?(parseFloat(storedOverride)||''):(autoRv||'');
+      monthRowsHtml+='<tr>'+
+        '<td style="padding:4px 8px;font-size:12px;color:#78350f;white-space:nowrap">'+mn+'</td>'+
+        '<td style="padding:4px 8px;font-size:12px;color:#b45309;text-align:right">'+(autoRv>0?fmt(autoRv):'—')+'</td>'+
+        '<td style="padding:4px 4px"><input type="number" id="6mrev-'+s.id+'-'+cm+'" value="'+inputVal+'" placeholder="'+(autoRv||0)+'" style="width:110px;padding:3px 6px;border:1px solid #fcd34d;border-radius:5px;font-size:12px;background:#fffbeb;color:#78350f;text-align:right"></td>'+
+        '</tr>';
     });
     const netRev=Math.max(0,accumulated-mktVal);
     const incentiveAmt=calc6mTiered(netRev,i6.tiers);
@@ -2177,12 +2178,13 @@ function build6mBlock(s,key){
       '<th style="padding:5px 8px;font-size:11px;color:#92400e;text-align:right;font-weight:700">Auto (from payroll)</th>'+
       '<th style="padding:5px 8px;font-size:11px;color:#92400e;text-align:right;font-weight:700">Override ✏️</th>'+
       '</tr></thead><tbody>'+monthRowsHtml+'</tbody>'+
-      '<tfoot><tr style="background:#fef3c7"><td colspan="2" style="padding:5px 8px;font-size:12px;font-weight:700;color:#78350f">Accumulated ('+monthCount+'/6 months)</td>'+
-      '<td style="padding:5px 8px;font-size:12px;font-weight:700;color:#92400e;text-align:right">'+fmt(accumulated)+' ฿</td></tr></tfoot>'+
+      '<tfoot><tr style="background:#fef3c7"><td colspan="2" style="padding:5px 8px;font-size:12px;font-weight:700;color:#78350f">Accumulated (<span id="6m-count-'+s.id+'">'+monthCount+'</span>/6 months)</td>'+
+      '<td style="padding:5px 8px;font-size:12px;font-weight:700;color:#92400e;text-align:right"><span id="6m-accum-'+s.id+'">'+fmt(accumulated)+'</span> ฿</td></tr></tfoot>'+
       '</table>'+
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+
       '<label style="font-size:12px;color:#78350f;white-space:nowrap;font-weight:600">MKT Cost Deduction (฿):</label>'+
-      '<input type="number" id="6m-mkt-'+s.id+'" value="'+(mktVal||'')+'" placeholder="0" style="flex:1;padding:5px 8px;border:1px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb;color:#78350f" oninput="upd6mCalc(\''+s.id+'\',\''+key+'\')">'+
+      '<input type="number" id="6m-mkt-'+s.id+'" value="'+(mktVal||'')+'" placeholder="0" style="flex:1;padding:5px 8px;border:1px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb;color:#78350f">'+
+      '<button onclick="upd6mCalc(\''+s.id+'\',\''+key+'\')" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">🔄 Recalculate</button>'+
       '</div>'+
       '<div id="6m-result-'+s.id+'" style="display:flex;justify-content:space-between;align-items:center;background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
       '<div style="font-size:12px;color:#78350f"><div>Net Revenue: <b>'+fmt(netRev)+' ฿</b></div><div style="color:#b45309;margin-top:2px">Incentive ('+calc6mRate(netRev,i6.tiers)+'%): <b style="color:#92400e">'+fmt(incentiveAmt)+' ฿</b></div></div>'+
@@ -2223,7 +2225,7 @@ function upd6mCalc(sid,key){
   });
   svP();
   // Recalculate accumulated using overrides
-  let accumulated=0;
+  let accumulated=0,monthCount=0;
   cycleMonths.forEach(cm=>{
     const ck=mkKey(cm,isPayJan?(y-1):y);
     const ep=P[ck]&&P[ck][sid];
@@ -2231,11 +2233,14 @@ function upd6mCalc(sid,key){
     const overrideKey='_6mrev_'+cm;
     const storedOverride=P[key][sid][overrideKey];
     const useVal=storedOverride!==null&&storedOverride!==undefined?parseFloat(storedOverride)||0:autoRv;
-    if(useVal>0)accumulated+=useVal;
+    if(useVal>0){accumulated+=useVal;monthCount++;}
   });
   const netRev=Math.max(0,accumulated-mktVal);
   const amt=calc6mTiered(netRev,s.incentive6m.tiers);
   const rate=calc6mRate(netRev,s.incentive6m.tiers);
+  // Update table footer
+  const accumEl=q('6m-accum-'+sid);if(accumEl)accumEl.textContent=fmt(accumulated);
+  const countEl=q('6m-count-'+sid);if(countEl)countEl.textContent=monthCount;
   const res=q('6m-result-'+sid);
   if(res)res.innerHTML='<div style="font-size:12px;color:#78350f"><div>Net Revenue: <b>'+fmt(netRev)+' ฿</b></div><div style="color:#b45309;margin-top:2px">Incentive ('+rate+'%): <b style="color:#92400e">'+fmt(amt)+' ฿</b></div></div><button onclick="apply6mPayout(\''+sid+'\',\''+key+'\')" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Apply to Payroll</button>';
 }
