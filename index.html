@@ -2216,9 +2216,8 @@ function upd6mCalc(sid,key){
   P[key][sid]['_6mmkt']=mktVal;
   // Save per-month overrides
   const [y,m]=[parseInt(key.split('_')[0]),parseInt(key.split('_')[1])];
-  const isPayJan=(m===1);
-  const cycle=s.incentive6m.cycle||1;
-  const isPayJul=(m===7);const isPayJan=(m===1);const cycleMonths=isPayJul?[1,2,3,4,5,6]:isPayJan?[7,8,9,10,11,12]:(m<=6?[1,2,3,4,5,6]:[7,8,9,10,11,12]);
+  const isPayJul=(m===7);const isPayJan=(m===1);
+  const cycleMonths=isPayJul?[1,2,3,4,5,6]:isPayJan?[7,8,9,10,11,12]:(m<=6?[1,2,3,4,5,6]:[7,8,9,10,11,12]);
   cycleMonths.forEach(cm=>{
     const inp=q('6mrev-'+sid+'-'+cm);
     if(inp!==null){P[key][sid]['_6mrev_'+cm]=inp.value===''?null:parseFloat(inp.value)||0;}
@@ -2251,8 +2250,8 @@ function apply6mPayout(sid,key){
   const mktInput=q('6m-mkt-'+sid);
   const mktVal=parseFloat(mktInput?mktInput.value:0)||0;
   const [y,m]=[parseInt(key.split('_')[0]),parseInt(key.split('_')[1])];
-  const isPayJan=(m===1);
-  const isPayJul=(m===7);const isPayJan=(m===1);const cycleMonths=isPayJul?[1,2,3,4,5,6]:isPayJan?[7,8,9,10,11,12]:(m<=6?[1,2,3,4,5,6]:[7,8,9,10,11,12]);
+  const isPayJul=(m===7);const isPayJan=(m===1);
+  const cycleMonths=isPayJul?[1,2,3,4,5,6]:isPayJan?[7,8,9,10,11,12]:(m<=6?[1,2,3,4,5,6]:[7,8,9,10,11,12]);
   let accumulated=0;
   cycleMonths.forEach(cm=>{
     const ck=mkKey(cm===12?1:cm+1, cm===12?(isPayJan?y:y+1):(isPayJan?(y-1):y));
