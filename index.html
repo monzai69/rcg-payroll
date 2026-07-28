@@ -2224,15 +2224,17 @@ function upd6mCalc(sid,key){
     if(inp!==null){P[key][sid]['_6mrev_'+cm]=inp.value===''?null:parseFloat(inp.value)||0;}
   });
   svP();
-  // Recalculate accumulated using overrides
+  // Recalculate accumulated using overrides — read directly from inputs
   let accumulated=0,monthCount=0;
   cycleMonths.forEach(cm=>{
     const ck=mkKey(cm===12?1:cm+1, cm===12?(isPayJan?y:y+1):(isPayJan?(y-1):y));
     const ep=P[ck]&&P[ck][sid];
     const autoRv=ep?parseFloat(ep.rev)||0:0;
+    const inp=q('6mrev-'+sid+'-'+cm);
+    const inputVal=inp&&inp.value!==''?parseFloat(inp.value)||0:null;
     const overrideKey='_6mrev_'+cm;
     const storedOverride=P[key][sid][overrideKey];
-    const useVal=storedOverride!==null&&storedOverride!==undefined?parseFloat(storedOverride)||0:autoRv;
+    const useVal=inputVal!==null?inputVal:(storedOverride!==null&&storedOverride!==undefined?parseFloat(storedOverride)||0:autoRv);
     if(useVal>0){accumulated+=useVal;monthCount++;}
   });
   const netRev=Math.max(0,accumulated-mktVal);
