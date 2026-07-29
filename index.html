@@ -2272,6 +2272,9 @@ function apply6mPayout(sid,key){
   const prev=parseFloat(P[key][sid].bonus)||0;
   P[key][sid].bonus=(prev+amt);
   P[key][sid]['_6mmkt']=mktVal;
+  // Keep the visible Bonus input in sync so Save All doesn't overwrite it with stale DOM data
+  const bonusInput=q('pr-bonus-'+sid);
+  if(bonusInput)bonusInput.value=P[key][sid].bonus;
   svP();
   // Re-render this card
   const e=P[key][sid];
