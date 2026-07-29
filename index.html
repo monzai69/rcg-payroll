@@ -1973,6 +1973,9 @@ function saveAndCopy(sid){
   if(existingSnap&&existingSnap.ct===s.ct){e.snap=existingSnap;}
   else{e.snap={base:s.base||0,hrrate:s.hrrate||0,fptdayrate:s.fptdayrate||0,otrate:s.otrate||0,ct:s.ct,emptype:s.emptype,fptmethod:s.fptmethod||'hourly',items:JSON.parse(JSON.stringify(s.items||[]))};}
   const c=calcM(s,e,key);e.net=c.net;e.payRows=buildPayRows(s,c);
+  // Preserve confirmed status
+  if(P[key][sid]&&P[key][sid].confirmed)e.confirmed=P[key][sid].confirmed;
+  if(P[key][sid]&&P[key][sid].confirmedAt)e.confirmedAt=P[key][sid].confirmedAt;
   P[key][sid]=e;svP();
   // Then copy summary
   copyPaySummary(sid);
@@ -2322,7 +2325,11 @@ function saveAll(){
       fptmethod:s.fptmethod||'hourly',
       items:JSON.parse(JSON.stringify(s.items||[]))
     };
-    const c=calcM(s,e,key);e.net=c.net;e.payRows=buildPayRows(s,c);P[key][s.id]=e;
+    const c=calcM(s,e,key);e.net=c.net;e.payRows=buildPayRows(s,c);
+    // Preserve confirmed status and paid flag — don't overwrite on save
+    if(P[key][s.id]&&P[key][s.id].confirmed)e.confirmed=P[key][s.id].confirmed;
+    if(P[key][s.id]&&P[key][s.id].confirmedAt)e.confirmedAt=P[key][s.id].confirmedAt;
+    P[key][s.id]=e;
     if(c.adv>0){
       A.forEach(a=>{
         if(a.staffId===s.id&&a.key===key&&a.status==='pending'&&a.installment>0){
