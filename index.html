@@ -1515,7 +1515,12 @@ async function publishSalary(){
   const m=qv('pm'),y=qv('py');
   const btn=q('btn-publish');
   const period=MTH[parseInt(m)-1]+' '+y;
-  if(!confirm('Send LINE notification to all staff for '+period+'?'))return;
+  const key=mkKey(parseInt(m),parseInt(y));
+  const alreadyPublished=P[key]&&P[key]._meta&&P[key]._meta.published;
+  const confirmMsg=alreadyPublished
+    ?'This period was already published. Re-publishing will re-send LINE notifications and reset the 2h reminder / 5h auto-confirm timers. Continue for '+period+'?'
+    :'Send LINE notification to all staff for '+period+'?';
+  if(!confirm(confirmMsg))return;
   btn.innerHTML='<i class="ti ti-loader"></i> Sending...';btn.disabled=true;
   try{
     const res=await fetch('https://rcg-payroll-line-production.up.railway.app/api/publish-salary',{
@@ -1526,6 +1531,9 @@ async function publishSalary(){
     const data=await res.json();
     if(data.ok){
       alert('✅ Sent to '+data.sent+' of '+data.total+' staff with LINE registered!');
+      // Reload P from Firebase so the local copy picks up the _meta the server just wrote
+      await window.cloudLoad();
+      rPay();
     } else {
       alert('❌ Server error: '+data.msg);
     }
@@ -1696,6 +1704,22 @@ function rPay(){
     q('btn-saveall').disabled=false;
     q('btn-saveall').style.opacity='';
     q('btn-saveall').style.cursor='';
+  }
+  // Show/hide "Published to LINE" status badge
+  let pubBadge=q('pay-publish-badge');
+  if(!pubBadge){
+    pubBadge=document.createElement('div');
+    pubBadge.id='pay-publish-badge';
+    const topbar=q('pay-topbar');
+    topbar&&topbar.parentNode.insertBefore(pubBadge,topbar);
+  }
+  const _meta=P[key]&&P[key]._meta;
+  if(_meta&&_meta.published){
+    const dtStr=new Date(_meta.publishedAt).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    pubBadge.style.cssText='background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:8px 16px;margin-bottom:14px;font-size:12px;font-weight:600;color:#16a34a;display:block';
+    pubBadge.innerHTML='✅ Published to LINE — '+dtStr+(_meta.reminderSent?' · Reminder sent':'')+(_meta.autoConfirmDone?' · Unconfirmed staff auto-confirmed':'');
+  }else{
+    pubBadge.style.display='none';
   }
   const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');
   if(!act.length){q('pay-cards').innerHTML='<div class="no-data">No full-time / full-part-time staff</div>';return}
