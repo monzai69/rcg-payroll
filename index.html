@@ -132,6 +132,7 @@ input:checked+.slider:before{transform:translateX(18px)}
 .cbv{font-size:11px;font-weight:600;color:#fff;white-space:nowrap}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <!-- Firebase -->
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js';
@@ -328,7 +329,7 @@ window.cloudLoad=async()=>{
       <button class="btn bok bsm" id="btn-saveall"><i class="ti ti-device-floppy"></i>Save All</button>
       <button class="btn bsm" id="btn-publish" style="background:#0e7490;color:#fff" onclick="publishSalary()"><i class="ti ti-send"></i>Publish to LINE</button>
       <button class="btn bgd bsm" id="btn-export"><i class="ti ti-table-export"></i>Export CSV</button>
-      <label class="btn bsm" style="background:#7c3aed;color:#fff;cursor:pointer" title="Import ค่ามือ & Revenue from LIV clinic CSV"><i class="ti ti-file-import"></i>Import ค่ามือ CSV<input type="file" id="csv-import-input" accept=".csv,.xlsx" style="display:none"></label>
+      <label class="btn bsm" style="background:#7c3aed;color:#fff;cursor:pointer" title="Import ค่ามือ & Revenue from DF Report (สรุปรายคน summary, CSV or XLSX)"><i class="ti ti-file-import"></i>Import ค่ามือ CSV<input type="file" id="csv-import-input" accept=".csv,.xlsx" style="display:none"></label>
       <span id="sync-status" style="display:none;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:#f0fdf4"></span>
     </div>
   </div>
@@ -871,9 +872,9 @@ window.cloudLoad=async()=>{
   </div>
   <div style="font-size:12px;color:#6b7280;margin-bottom:14px;background:#f8fafc;border-radius:8px;padding:10px 12px">
     <div style="font-weight:700;color:#374151;margin-bottom:4px">How it works:</div>
-    <div>• <b>Revenue</b> = ยอดขาย + มัดจำ (Section 2 + Section 3 totals per staff)</div>
-    <div>• <b>ค่ามือ</b> = ยอดรวมค่ามือ/DF (Section 1 total per staff)</div>
-    <div style="margin-top:4px;color:#f59e0b">⚠️ Matching by nickname (ชื่อเล่น). Review before applying.</div>
+    <div>• <b>ค่ามือ/DF</b> = ค่าคอม column, from the DF tab's สรุปรายคน summary (per staff)</div>
+    <div>• <b>Revenue</b> = ยอดอ้างอิง column, from the COMM_SALE tab's สรุปรายคน summary (already includes ยอดขาย + มัดจำ)</div>
+    <div style="margin-top:4px;color:#f59e0b">⚠️ Matching by nickname (ชื่อเล่น). Review before applying. Re-importing replaces previous ค่ามือ/Revenue for this period (doesn't stack).</div>
   </div>
   <div id="csv-preview"></div>
   <div class="fx g8 jb mt16">
@@ -1733,91 +1734,98 @@ q('btn-saveall').addEventListener('click',saveAll);q('btn-export').addEventListe
 let _csvData=null;
 document.getElementById('csv-import-input').addEventListener('change',function(){
   const f=this.files[0];if(!f)return;
+  const isXlsx=/\.xlsx$/i.test(f.name);
   const rd=new FileReader();
-  rd.onload=e=>parseClinicCSV(e.target.result);
-  rd.readAsText(f,'UTF-8');
+  rd.onload=e=>{
+    try{
+      const wb=isXlsx?XLSX.read(e.target.result,{type:'array'}):XLSX.read(e.target.result,{type:'string'});
+      parseClinicReport(wb);
+    }catch(err){
+      alert('❌ Could not read file: '+err.message);
+    }
+  };
+  if(isXlsx)rd.readAsArrayBuffer(f);else rd.readAsText(f,'UTF-8');
   this.value=''; // reset so same file can be re-imported
 });
 
-function parseClinicCSV(text){
-  const lines=text.split('\n').map(l=>l.replace(/\r/,''));
-
-  // ── Section 1: ค่ามือ/DF summary ──
-  // Header: ชื่อ แพทย์/พนักงาน, ยอดรวมราคาขาย, ยอดรวมราคาขายหลังหักส่วนลด, ยอดรวมค่ามือ/DF
-  const kamueMap={};
-  const kamueHdrIdx=lines.findIndex(l=>l.includes('ยอดรวมค่ามือ'));
-  if(kamueHdrIdx>=0){
-    let i=kamueHdrIdx+1;
-    while(i<lines.length&&lines[i].trim()&&!lines[i].startsWith('total')&&!lines[i].startsWith('รวม')){
-      const cols=lines[i].split(',');
-      if(cols.length>=4){
-        const name=cols[0].trim();
-        const kamue=parseFloat(cols[3])||0;
-        if(name&&kamue>0)kamueMap[name]=kamue;
+// Scan one sheet's rows (array-of-arrays) for the รวมค่ามือ/รวมค่าคอม totals
+// and the สรุปรายคน per-person summary block. Returns null if this sheet
+// doesn't look like a DF report table at all.
+function parseReportSheet(rows){
+  let feeTotalCol=-1,feeComTotal=0,commTotalCol=-1,commRefTotal=0;
+  let sumHdrRow=-1,nameCol=-1,refCol=-1,comCol=-1;
+  for(let r=0;r<rows.length;r++){
+    const row=rows[r]||[];
+    for(let c=0;c<row.length;c++){
+      const v=row[c];
+      if(typeof v!=='string')continue;
+      if(v.trim()==='รวมค่ามือ (FEE)'){feeTotalCol=c;feeComTotal=parseFloat(row[c+2])||0;}
+      else if(v.trim()==='รวมค่าคอม (COMM)'){commTotalCol=c;commRefTotal=parseFloat(row[c+1])||0;}
+      else if(v.trim()==='สรุปรายคน'){sumHdrRow=r;nameCol=c;}
+    }
+    if(sumHdrRow===r&&nameCol>=0){
+      // ยอดอ้างอิง / ค่าคอม header cells are on the same row, somewhere after nameCol
+      for(let c=nameCol+1;c<row.length;c++){
+        if(row[c]==='ยอดอ้างอิง')refCol=c;
+        else if(row[c]==='ค่าคอม')comCol=c;
       }
-      i++;
     }
+  }
+  if(sumHdrRow<0||nameCol<0||refCol<0||comCol<0)return null; // not a report sheet
+
+  const hasFee=feeComTotal>0;
+  const hasComm=commRefTotal>0;
+  if(!hasFee&&!hasComm)return null; // empty table, nothing to import
+
+  const perPerson={};
+  for(let r=sumHdrRow+1;r<rows.length;r++){
+    const row=rows[r]||[];
+    const name=row[nameCol];
+    if(!name||typeof name!=='string'||!name.trim())break; // summary block ends at first blank name
+    perPerson[name.trim()]={ref:parseFloat(row[refCol])||0,com:parseFloat(row[comCol])||0};
   }
 
-  // ── Section 2: ยอดขาย (sales revenue) ──
-  // Header: ชื่อ แพทย์/พนักงาน, ยอดรวม  (first occurrence, NOT มัดจำ)
-  const salesMap={};
-  // Find the sales section — it comes BEFORE มัดจำ section
-  const madjanHdrIdx=lines.findIndex(l=>l.includes('มัดจำยอดเงิน'));
-  const salesHdrIdx=lines.findIndex((l,i)=>l.includes('ชื่อ แพทย์/พนักงาน')&&l.includes('ยอดรวม')&&!l.includes('ราคาขาย')&&i<(madjanHdrIdx>0?madjanHdrIdx:99999));
-  if(salesHdrIdx>=0){
-    let i=salesHdrIdx+1;
-    while(i<lines.length&&lines[i].trim()&&!lines[i].startsWith('รวมสุทธิ')&&!lines[i].startsWith('total')){
-      const cols=lines[i].split(',');
-      if(cols.length>=2){
-        const name=cols[0].trim();
-        const amt=parseFloat(cols[1])||0;
-        if(name&&amt>0)salesMap[name]=amt;
-      }
-      i++;
-    }
-  }
+  return {hasFee,hasComm,perPerson};
+}
 
-  // ── Section 3: มัดจำยอดเงิน (deposits) ──
-  const depositMap={};
-  // Find last "ชื่อ แพทย์/พนักงาน,ยอดรวม" header (deposit summary is at the end)
-  let depHdrIdx=-1;
-  for(let i=lines.length-1;i>=0;i--){
-    if(lines[i].includes('ชื่อ แพทย์/พนักงาน')&&lines[i].includes('ยอดรวม')&&!lines[i].includes('ราคาขาย')){
-      depHdrIdx=i;break;
-    }
-  }
-  if(depHdrIdx>=0&&depHdrIdx!==salesHdrIdx){
-    let i=depHdrIdx+1;
-    while(i<lines.length&&lines[i].trim()&&!lines[i].startsWith('total')){
-      const cols=lines[i].split(',');
-      if(cols.length>=2){
-        const name=cols[0].trim();
-        const amt=parseFloat(cols[1])||0;
-        if(name&&amt>0)depositMap[name]=amt;
-      }
-      i++;
-    }
-  }
+function parseClinicReport(wb){
+  const sheetNames=wb.SheetNames;
+  // "All" (combined DF+COMM view) is redundant when the split DF/COMM_SALE
+  // sheets are also present — its per-person ยอดอ้างอิง mixes DF-ref and
+  // COMM-ref together, which would overstate Revenue. Skip it in that case.
+  const useSheets=sheetNames.length>1?sheetNames.filter(n=>n.trim().toLowerCase()!=='all'):sheetNames;
 
-  // ── Match by full name to staff nickname ──
-  // Build a map: full Thai name → staff object
+  const kamueMap={},revenueMap={};
+  useSheets.forEach(name=>{
+    const ws=wb.Sheets[name];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    const parsed=parseReportSheet(rows);
+    if(!parsed)return;
+    const{hasFee,hasComm,perPerson}=parsed;
+    // If a single table has BOTH fee and comm data (e.g. a combined "All"-style
+    // export read on its own, such as a CSV), only trust ค่ามือ from it —
+    // its ยอดอ้างอิง mixes DF-ref and COMM-ref together.
+    const takeRevenue=hasComm&&!(hasFee&&hasComm);
+    const takeKamue=hasFee;
+    Object.keys(perPerson).forEach(name=>{
+      if(takeKamue)kamueMap[name]=(kamueMap[name]||0)+perPerson[name].com;
+      if(takeRevenue)revenueMap[name]=(revenueMap[name]||0)+perPerson[name].ref;
+    });
+  });
+
+  // ── Match by full name / nickname to staff ──
   const results=[];
-  const allNames=new Set([...Object.keys(kamueMap),...Object.keys(salesMap)]);
+  const allNames=new Set([...Object.keys(kamueMap),...Object.keys(revenueMap)]);
   allNames.forEach(fullName=>{
-    // Try to match: find staff whose fn+ln or nn appears in the name
     const matched=S.find(s=>{
       const staffFull=(s.fn+s.ln).replace(/\s/g,'');
       const csvFull=fullName.replace(/\s/g,'');
       return staffFull===csvFull||csvFull.includes(staffFull)||staffFull.includes(csvFull)||
-        // Also try nickname match
         (s.nn&&fullName.includes(s.nn)&&s.nn.length>1);
     });
     const kamue=kamueMap[fullName]||0;
-    const sales=salesMap[fullName]||0;
-    const deposit=depositMap[fullName]||0;
-    const revenue=sales+deposit;
-    results.push({fullName,matched,kamue,sales,deposit,revenue});
+    const revenue=revenueMap[fullName]||0;
+    results.push({fullName,matched,kamue,revenue});
   });
 
   _csvData=results;
@@ -1828,19 +1836,19 @@ function parseClinicCSV(text){
 function renderCSVPreview(results){
   const prev=document.getElementById('csv-preview');
   const btn=document.getElementById('btn-apply-csv');
-  if(!results.length){prev.innerHTML='<div class="no-data">No data found in file. Make sure it\'s the correct LIV clinic report CSV.</div>';btn.style.display='none';return;}
+  if(!results.length){prev.innerHTML='<div class="no-data">No data found in file. Make sure it\'s a DF Report export (with the สรุปรายคน summary block).</div>';btn.style.display='none';return;}
   const matched=results.filter(r=>r.matched);
   const unmatched=results.filter(r=>!r.matched);
   let html='';
   if(matched.length){
     html+='<div style="font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">✅ Matched Staff ('+matched.length+')</div>';
     html+='<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px">';
-    html+='<tr style="background:#f8fafc"><th style="padding:7px 10px;text-align:left;font-weight:700;color:#6b7280">CSV Name</th><th style="padding:7px 10px;text-align:left;font-weight:700;color:#6b7280">→ Staff</th><th style="padding:7px 10px;text-align:right;font-weight:700;color:#6b7280">Revenue (ยอดขาย+มัดจำ)</th><th style="padding:7px 10px;text-align:right;font-weight:700;color:#6b7280">ค่ามือ/DF</th></tr>';
+    html+='<tr style="background:#f8fafc"><th style="padding:7px 10px;text-align:left;font-weight:700;color:#6b7280">Report Name</th><th style="padding:7px 10px;text-align:left;font-weight:700;color:#6b7280">→ Staff</th><th style="padding:7px 10px;text-align:right;font-weight:700;color:#6b7280">Revenue (ยอดอ้างอิง)</th><th style="padding:7px 10px;text-align:right;font-weight:700;color:#6b7280">ค่ามือ/DF</th></tr>';
     matched.forEach(r=>{
       html+='<tr style="border-bottom:1px solid #f3f4f6">'+
         '<td style="padding:7px 10px;color:#6b7280;font-size:11px">'+r.fullName+'</td>'+
         '<td style="padding:7px 10px;font-weight:600">'+r.matched.nn+' '+r.matched.fn+'</td>'+
-        '<td style="padding:7px 10px;text-align:right;color:#1e3a5f;font-weight:600">'+fmt(r.revenue)+' ฿'+(r.deposit>0?'<div style="font-size:10px;color:#9ca3af">ยอดขาย '+fmt(r.sales)+' + มัดจำ '+fmt(r.deposit)+'</div>':'')+'</td>'+
+        '<td style="padding:7px 10px;text-align:right;color:#1e3a5f;font-weight:600">'+(r.revenue>0?fmt(r.revenue)+' ฿':'—')+'</td>'+
         '<td style="padding:7px 10px;text-align:right;color:var(--gd);font-weight:600">'+(r.kamue>0?fmt(r.kamue)+' ฿':'—')+'</td>'+
       '</tr>';
     });
@@ -1850,7 +1858,7 @@ function renderCSVPreview(results){
     html+='<div style="font-size:11px;font-weight:700;color:#e24b4a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⚠️ Not matched ('+unmatched.length+') — will be skipped</div>';
     html+='<div style="background:#fff1f2;border-radius:8px;padding:10px 12px;font-size:12px;color:#9ca3af;margin-bottom:10px">'+
       unmatched.map(r=>'<div>'+r.fullName+' — Revenue: '+fmt(r.revenue)+' ฿, ค่ามือ: '+fmt(r.kamue)+' ฿</div>').join('')+
-      '<div style="margin-top:6px;font-size:11px">Make sure staff nicknames or full names match between the system and the CSV.</div>'+
+      '<div style="margin-top:6px;font-size:11px">Make sure staff nicknames or full names match between the system and the report.</div>'+
     '</div>';
   }
   prev.innerHTML=html;
@@ -1866,14 +1874,18 @@ function applyCSVImport(){
     const s=r.matched;
     const sid=s.id;
     if(!P[key][sid])P[key][sid]={sid,rev:0,mkt:0,otHrs:0,bonus:0,dLa:0,dOth:0,hours:0,days:0,periodic:{},diligence:{}};
-    // Set revenue
+    // Revenue: straight overwrite — this import is always the latest full snapshot
     if(r.revenue>0)P[key][sid].rev=r.revenue;
-    // ค่ามือ: add to bonus field if staff doesn't have a commission item, otherwise just set revenue
-    // Check if staff has commission-based items — if yes, revenue is enough
+    // ค่ามือ → bonus: REPLACE (not add). Strip out whatever this field's last
+    // import contributed, then add the fresh amount — this way re-importing a
+    // later, more-complete file doesn't double-count, and doesn't wipe out
+    // other bonus components (manual entries, 6-month incentive, etc).
     const hasCommItem=(s.items||[]).some(i=>['comm_flat','comm_tiered','comm_tiered_fixed'].includes(i.type));
-    if(r.kamue>0&&!hasCommItem){
-      // No commission item — add ค่ามือ directly to bonus
-      P[key][sid].bonus=(parseFloat(P[key][sid].bonus)||0)+r.kamue;
+    if(!hasCommItem){
+      const prevImported=parseFloat(P[key][sid]._importedKamue)||0;
+      const baseBonus=(parseFloat(P[key][sid].bonus)||0)-prevImported;
+      P[key][sid].bonus=baseBonus+r.kamue;
+      P[key][sid]._importedKamue=r.kamue;
     }
     applied++;
   });
@@ -1883,7 +1895,7 @@ function applyCSVImport(){
   rPay();
   // Show success message
   const status=document.getElementById('sync-status');
-  if(status){status.style.display='block';status.style.color='#16a34a';status.textContent='✅ Imported '+applied+' staff from CSV';setTimeout(()=>status.style.display='none',4000);}
+  if(status){status.style.display='block';status.style.color='#16a34a';status.textContent='✅ Imported '+applied+' staff from report';setTimeout(()=>status.style.display='none',4000);}
 }
 
 function buildCard(s,e,key,locked){
