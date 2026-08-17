@@ -700,6 +700,39 @@ window.cloudLoad=async()=>{
 </div>
 </div>
 
+<!-- EXPORT HISTORY REPORT MODAL -->
+<div class="modal-overlay" id="export-hist-modal">
+<div class="modal-box" style="max-width:420px">
+  <div class="fx jb ic" style="margin-bottom:14px">
+    <div style="font-size:16px;font-weight:700;color:var(--nv)">📊 Export Payment History</div>
+    <button class="btn bo bsm" onclick="closeM('export-hist-modal')"><i class="ti ti-x"></i></button>
+  </div>
+  <div style="font-size:12px;color:#6b7280;margin-bottom:14px">Select the period to include. Full breakdown per month (Base, each pay item, OT, Bonus, deductions, Net) will be exported to Excel.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+    <div>
+      <label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:4px">From Month</label>
+      <select id="eh-fm"></select>
+    </div>
+    <div>
+      <label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:4px">From Year</label>
+      <select id="eh-fy"></select>
+    </div>
+    <div>
+      <label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:4px">To Month</label>
+      <select id="eh-tm"></select>
+    </div>
+    <div>
+      <label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:4px">To Year</label>
+      <select id="eh-ty"></select>
+    </div>
+  </div>
+  <div class="fx g8 jb mt16">
+    <button class="btn bo" onclick="closeM('export-hist-modal')">Cancel</button>
+    <button class="btn bp" onclick="downloadStaffHistoryXLSX()"><i class="ti ti-download"></i>Download Excel</button>
+  </div>
+</div>
+</div>
+
 <!-- STAFF MODAL -->
 <div class="modal-overlay" id="sm">
 <div class="modal-box">
@@ -1597,7 +1630,7 @@ async function saveHistory(staffId,changes,user){
   }catch(e){console.warn('saveHistory failed',e);}
 }
 
-let _hStaffId=null,_hTab='changes';
+let _hStaffId=null,_hTab='changes',_exportHistSid=null;
 async function openHistory(sid){
   const s=S.find(x=>x.id===sid);if(!s)return;
   _hStaffId=sid;_hTab='changes';
@@ -1659,6 +1692,10 @@ async function loadHistoryTab(sid){
     }
     const avg=months>0?total/months:0;
     q('hm-payments').innerHTML=`
+      <div class="fx jb ic" style="margin-bottom:10px">
+        <div style="font-size:11px;color:#9ca3af">Current calendar year (${y})</div>
+        <button class="btn bsm bo" onclick="openExportHistModal('${sid}')"><i class="ti ti-file-spreadsheet"></i>📊 Export Report</button>
+      </div>
       <div style="margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap">
         <div style="flex:1;background:#eff6ff;border-radius:9px;padding:10px 14px;min-width:120px"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase">Year Total</div><div style="font-size:18px;font-weight:800;color:var(--nv)">${fmt(total)} ฿</div></div>
         <div style="flex:1;background:#f0fdf4;border-radius:9px;padding:10px 14px;min-width:120px"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase">Avg/Month</div><div style="font-size:18px;font-weight:800;color:#16a34a">${fmt(avg)} ฿</div></div>
@@ -1670,6 +1707,140 @@ async function loadHistoryTab(sid){
         <tr style="background:#1e3a5f"><td colspan="3" style="padding:9px 10px;font-size:13px;font-weight:700;color:#fff">Total ${y}</td><td style="padding:9px 10px;font-size:15px;font-weight:800;color:#fde68a;text-align:right">${fmt(total)} ฿</td></tr>
       </table>`;
   }
+}
+
+function openExportHistModal(sid){
+  _exportHistSid=sid;
+  const y=new Date().getFullYear(),cm=new Date().getMonth()+1;
+  ['eh-fm','eh-tm'].forEach(id=>{
+    const el=q(id);el.innerHTML='';
+    MTH.forEach((m,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=m;el.appendChild(o);});
+  });
+  ['eh-fy','eh-ty'].forEach(id=>{
+    const el=q(id);el.innerHTML='';
+    for(let i=y-2;i<=y+1;i++){const o=document.createElement('option');o.value=i;o.textContent=i;el.appendChild(o);}
+  });
+  q('eh-fm').value=1;q('eh-fy').value=y;       // default: January this year
+  q('eh-tm').value=cm;q('eh-ty').value=y;      // ...to current month
+  openM('export-hist-modal');
+}
+
+function downloadStaffHistoryXLSX(){
+  const sid=_exportHistSid;const s=S.find(x=>x.id===sid);if(!s)return;
+  const fromM=parseInt(qv('eh-fm')),fromY=parseInt(qv('eh-fy')),toM=parseInt(qv('eh-tm')),toY=parseInt(qv('eh-ty'));
+  if(fromY>toY||(fromY===toY&&fromM>toM)){alert('"From" period must be before or equal to "To" period.');return;}
+
+  // Build the list of {m,y} periods in range, oldest first
+  const periods=[];
+  let y=fromY,m=fromM;
+  while(y<toY||(y===toY&&m<=toM)){
+    periods.push({m,y});
+    m++;if(m>12){m=1;y++;}
+  }
+
+  // Pass 1: compute calcM() for every period, and collect the union of pay-item
+  // names in first-seen order (this staff's actual item names — including if they
+  // changed over time, since calcM uses whatever items were snapshotted per period)
+  const calcs=periods.map(p=>{
+    const key=mkKey(p.m,p.y);
+    const e=(P[key]&&P[key][sid])||{};
+    return{...p,key,c:calcM(s,e,key)};
+  });
+  const itemNames=[];
+  calcs.forEach(({c})=>{(c.rows||[]).forEach(r=>{if(!itemNames.includes(r.name))itemNames.push(r.name);});});
+
+  // ── Build worksheet rows ──
+  const headers=['Month','Base',...itemNames,'OT','Bonus/Incentive','Leave Ded.','Gross','SSO','Tax/WHT','Other Ded.','Advance','Net Pay'];
+  const nCols=headers.length;
+  const baseCol=1,itemStartCol=2,itemEndCol=1+itemNames.length,
+    otCol=itemEndCol+1,bonCol=otCol+1,leaveCol=bonCol+1,grossCol=leaveCol+1,
+    ssoCol=grossCol+1,taxCol=ssoCol+1,othCol=taxCol+1,advCol=othCol+1,netCol=advCol+1;
+  const colLetter=c=>XLSX.utils.encode_col(c);
+
+  const staffName=(s.nn?s.nn+' ':'')+s.fn+' '+(s.ln||'');
+  const periodLabel=MTH[fromM-1]+' '+fromY+' – '+MTH[toM-1]+' '+toY;
+  const aoa=[
+    ['Payment History Report — '+staffName],
+    ['Period: '+periodLabel+'  |  Department: '+(s.dept||'-')+'  |  Generated: '+new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})],
+    [],
+    headers
+  ];
+  const headerRowIdx=aoa.length-1; // 0-based
+  const firstDataRow=headerRowIdx+1;
+
+  calcs.forEach(({m,y,c})=>{
+    const row=new Array(nCols).fill(0);
+    row[0]=MTH[m-1]+' '+y;
+    row[baseCol]=c.bG||0;
+    itemNames.forEach((nm,i)=>{
+      const found=(c.rows||[]).find(r=>r.name===nm);
+      row[itemStartCol+i]=found?found.net:0;
+    });
+    row[otCol]=c.otA||0;
+    row[bonCol]=c.bon||0;
+    row[leaveCol]=c.dL||0;
+    row[grossCol]=null; // formula, filled below
+    row[ssoCol]=c.sso||0;
+    row[taxCol]=c.isPerm?(c.mT||0):(c.whtD||0);
+    row[othCol]=c.dO||0;
+    row[advCol]=c.adv||0;
+    row[netCol]=null; // formula, filled below
+    aoa.push(row);
+  });
+  const lastDataRow=aoa.length-1; // 0-based
+
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+
+  // Gross = Base + items + OT + Bonus − Leave Ded.  (matches calcM's own formula)
+  // Net   = Gross − SSO − Tax − Other Ded. − Advance
+  for(let r=firstDataRow;r<=lastDataRow;r++){
+    const xr=r+1; // 1-based for A1 refs
+    const itemSum=itemNames.length?'+SUM('+colLetter(itemStartCol)+xr+':'+colLetter(itemEndCol)+xr+')':'';
+    ws[colLetter(grossCol)+xr]={t:'n',f:colLetter(baseCol)+xr+itemSum+'+'+colLetter(otCol)+xr+'+'+colLetter(bonCol)+xr+'-'+colLetter(leaveCol)+xr};
+    ws[colLetter(netCol)+xr]={t:'n',f:colLetter(grossCol)+xr+'-'+colLetter(ssoCol)+xr+'-'+colLetter(taxCol)+xr+'-'+colLetter(othCol)+xr+'-'+colLetter(advCol)+xr};
+  }
+
+  // Total row
+  const totalRow=lastDataRow+2; // 0-based, one blank-free row after data
+  const totalXr=totalRow+1;
+  ws[colLetter(0)+totalXr]={t:'s',v:'Total ('+periodLabel+')'};
+  for(let c=1;c<nCols;c++){
+    const letter=colLetter(c);
+    ws[letter+totalXr]={t:'n',f:'SUM('+letter+(firstDataRow+1)+':'+letter+(lastDataRow+1)+')'};
+  }
+  const ref=XLSX.utils.decode_range(ws['!ref']);
+  ref.e.r=Math.max(ref.e.r,totalRow);
+  ws['!ref']=XLSX.utils.encode_range(ref);
+
+  // Notes
+  let noteRow=totalRow+2;
+  const notes=[
+    'Leave Ded. is already reflected within Gross (per RCG payroll rules), not subtracted again in Net.',
+    'Bonus/Incentive is the raw Bonus field as saved for that period — for staff without a dedicated ค่ามือ item,',
+    'this may combine manual bonus entries, 6-month incentive payouts, and imported ค่ามือ into one figure.'
+  ];
+  notes.forEach(n=>{ws[colLetter(0)+(noteRow+1)]={t:'s',v:n};noteRow++;});
+
+  // Formatting: currency number format on all numeric columns
+  for(let r=firstDataRow;r<=totalRow;r++){
+    for(let c=1;c<nCols;c++){
+      const cell=ws[colLetter(c)+(r+1)];
+      if(cell)cell.z='#,##0.00;(#,##0.00);"-"';
+    }
+  }
+  // Column widths
+  ws['!cols']=headers.map((h,i)=>({wch:i===0?14:Math.max(10,h.length+2)}));
+  // Merge title/subtitle across all columns
+  ws['!merges']=[
+    {s:{r:0,c:0},e:{r:0,c:nCols-1}},
+    {s:{r:1,c:0},e:{r:1,c:nCols-1}}
+  ];
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Payment History');
+  const fname='Payment_History_'+(s.nn||s.fn)+'_'+MTH[fromM-1]+fromY+'-'+MTH[toM-1]+toY+'.xlsx';
+  XLSX.writeFile(wb,fname);
+  closeM('export-hist-modal');
 }
 
 function isPayrollLocked(m,y){
