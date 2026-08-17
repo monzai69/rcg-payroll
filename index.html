@@ -1779,12 +1779,12 @@ function downloadStaffHistoryXLSX(){
     row[otCol]=c.otA||0;
     row[bonCol]=c.bon||0;
     row[leaveCol]=c.dL||0;
-    row[grossCol]=null; // formula, filled below
+    row[grossCol]=c.gross||0; // cached value; formula added below so it also recalculates on edit
     row[ssoCol]=c.sso||0;
     row[taxCol]=c.isPerm?(c.mT||0):(c.whtD||0);
     row[othCol]=c.dO||0;
     row[advCol]=c.adv||0;
-    row[netCol]=null; // formula, filled below
+    row[netCol]=c.net||0; // cached value; formula added below so it also recalculates on edit
     aoa.push(row);
   });
   const lastDataRow=aoa.length-1; // 0-based
@@ -1793,20 +1793,25 @@ function downloadStaffHistoryXLSX(){
 
   // Gross = Base + items + OT + Bonus − Leave Ded.  (matches calcM's own formula)
   // Net   = Gross − SSO − Tax − Other Ded. − Advance
+  // Cached 'v' is set to calcM's own computed number so the cell displays correctly
+  // even in viewers that don't auto-recalculate formulas on open (mobile/quick-preview).
   for(let r=firstDataRow;r<=lastDataRow;r++){
     const xr=r+1; // 1-based for A1 refs
+    const{c}=calcs[r-firstDataRow];
     const itemSum=itemNames.length?'+SUM('+colLetter(itemStartCol)+xr+':'+colLetter(itemEndCol)+xr+')':'';
-    ws[colLetter(grossCol)+xr]={t:'n',f:colLetter(baseCol)+xr+itemSum+'+'+colLetter(otCol)+xr+'+'+colLetter(bonCol)+xr+'-'+colLetter(leaveCol)+xr};
-    ws[colLetter(netCol)+xr]={t:'n',f:colLetter(grossCol)+xr+'-'+colLetter(ssoCol)+xr+'-'+colLetter(taxCol)+xr+'-'+colLetter(othCol)+xr+'-'+colLetter(advCol)+xr};
+    ws[colLetter(grossCol)+xr]={t:'n',v:c.gross||0,f:colLetter(baseCol)+xr+itemSum+'+'+colLetter(otCol)+xr+'+'+colLetter(bonCol)+xr+'-'+colLetter(leaveCol)+xr};
+    ws[colLetter(netCol)+xr]={t:'n',v:c.net||0,f:colLetter(grossCol)+xr+'-'+colLetter(ssoCol)+xr+'-'+colLetter(taxCol)+xr+'-'+colLetter(othCol)+xr+'-'+colLetter(advCol)+xr};
   }
 
-  // Total row
+  // Total row — cached 'v' computed directly from the same numbers already in each column
   const totalRow=lastDataRow+2; // 0-based, one blank-free row after data
   const totalXr=totalRow+1;
   ws[colLetter(0)+totalXr]={t:'s',v:'Total ('+periodLabel+')'};
   for(let c=1;c<nCols;c++){
     const letter=colLetter(c);
-    ws[letter+totalXr]={t:'n',f:'SUM('+letter+(firstDataRow+1)+':'+letter+(lastDataRow+1)+')'};
+    let colSum=0;
+    for(let r=firstDataRow;r<=lastDataRow;r++){const cell=ws[colLetter(c)+(r+1)];colSum+=(cell&&typeof cell.v==='number')?cell.v:0;}
+    ws[letter+totalXr]={t:'n',v:colSum,f:'SUM('+letter+(firstDataRow+1)+':'+letter+(lastDataRow+1)+')'};
   }
   const ref=XLSX.utils.decode_range(ws['!ref']);
   ref.e.r=Math.max(ref.e.r,totalRow);
