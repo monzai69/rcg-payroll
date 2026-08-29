@@ -2083,12 +2083,20 @@ function applyCSVImport(){
     if(!P[key][sid])P[key][sid]={sid,rev:0,mkt:0,otHrs:0,bonus:0,dLa:0,dOth:0,hours:0,days:0,periodic:{},diligence:{}};
     // Revenue: straight overwrite — this import is always the latest full snapshot
     if(r.revenue>0)P[key][sid].rev=r.revenue;
-    // ค่ามือ → bonus: REPLACE (not add). Strip out whatever this field's last
-    // import contributed, then add the fresh amount — this way re-importing a
-    // later, more-complete file doesn't double-count, and doesn't wipe out
-    // other bonus components (manual entries, 6-month incentive, etc).
+    // ค่ามือ destination — checked in priority order per staff:
+    // 1. Has a dedicated periodic/comm_flat_custom item literally named "ค่ามือ"
+    //    (a manual fill-in box on their card) → write straight there. This takes
+    //    priority even if they ALSO have an unrelated Commission item — the named
+    //    box is where the number is meant to go, not wherever a % item happens to be.
+    // 2. Else, has a comm_flat/tiered commission item → skip; it auto-calculates
+    //    from Revenue already, importing again here would be redundant/wrong.
+    // 3. Else → fall back to Bonus, same REPLACE-not-add logic as before.
+    if(!P[key][sid].periodic)P[key][sid].periodic={};
+    const kamueBoxItem=(s.items||[]).find(i=>i.name==='ค่ามือ'&&(i.type==='periodic'||i.type==='comm_flat_custom'));
     const hasCommItem=(s.items||[]).some(i=>['comm_flat','comm_tiered','comm_tiered_fixed'].includes(i.type));
-    if(!hasCommItem){
+    if(kamueBoxItem){
+      P[key][sid].periodic[kamueBoxItem.id]=r.kamue;
+    }else if(!hasCommItem){
       const prevImported=parseFloat(P[key][sid]._importedKamue)||0;
       const baseBonus=(parseFloat(P[key][sid].bonus)||0)-prevImported;
       P[key][sid].bonus=baseBonus+r.kamue;
