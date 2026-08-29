@@ -1396,6 +1396,7 @@ const ITYPES={
 };
 function addItemWith(item){
   const tb=q('items-body'),tr=document.createElement('tr');
+  if(item&&item.id)tr.dataset.itemId=item.id; // preserve original ID across edits — see getItems()
   const names=C.itemNames||[];const cur=item?item.name||'':'';
   const isCustom=cur!==''&&!names.includes(cur)&&cur!=='อื่นๆ';
   const displayCur=isCustom?'อื่นๆ':cur;
@@ -1510,7 +1511,7 @@ function getItems(){
         r:parseFloat(r.querySelector('.trr').value)||0
       })).filter(t=>t.r>0);
     }
-    return{id:'i'+Date.now()+Math.random().toString(36).slice(2,5),name,type,
+    return{id:tr.dataset.itemId||('i'+Date.now()+Math.random().toString(36).slice(2,5)),name,type,
       val:parseFloat(tr.querySelector('.ival').value)||0,
       isWHT:tr.querySelector('.iwht').checked,
       isDiligence:tr.querySelector('.idil').checked,
