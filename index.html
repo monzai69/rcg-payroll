@@ -1004,6 +1004,19 @@ function calcM(s,e,key){
   const emptype=snap?snap.emptype:s.emptype;
   const fptmethod=snap?snap.fptmethod:s.fptmethod;
   const items=snap?snap.items:s.items;
+  // Snapshots taken before item IDs became stable across staff edits may still
+  // carry a stale ID for manual-entry items (periodic / comm_flat_custom) —
+  // these represent monthly data entry, not a frozen historical rate, so they
+  // should always resolve against the CURRENT live item ID. Patching it here
+  // also self-heals the stored snapshot the next time this period is saved.
+  if(snap&&s.items){
+    items.forEach(it=>{
+      if((it.type==='periodic'||it.type==='comm_flat_custom')){
+        const live=s.items.find(li=>li.name===it.name&&li.type===it.type);
+        if(live&&live.id!==it.id)it.id=live.id;
+      }
+    });
+  }
   const isPerm=ct==='permanent',whtR=(parseFloat(C.wht)||3)/100,iWhtR=(parseFloat(s.wht)||3)/100;
   let bG=0,bLabel='';
   if(emptype==='fulltime'){bG=parseFloat(base)||0;bLabel='Base '+fmt(bG)+'฿';}
