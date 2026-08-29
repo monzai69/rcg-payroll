@@ -1935,15 +1935,21 @@ function parseReportSheet(rows){
     for(let c=0;c<row.length;c++){
       const v=row[c];
       if(typeof v!=='string')continue;
-      if(v.trim()==='รวมค่ามือ (FEE)'){feeTotalCol=c;feeComTotal=parseFloat(row[c+2])||0;}
-      else if(v.trim()==='รวมค่าคอม (COMM)'){commTotalCol=c;commRefTotal=parseFloat(row[c+1])||0;}
-      else if(v.trim()==='สรุปรายคน'){sumHdrRow=r;nameCol=c;}
+      const vt=v.trim();
+      // Match by prefix, not exact string — the clinic system has renamed the
+      // parenthetical suffix before (FEE), (COMM), (COMM_SALE), (COMM_DEPOSIT)
+      // etc. without warning, so pin only on the stable Thai prefix.
+      if(vt.startsWith('รวมค่ามือ')){feeTotalCol=c;feeComTotal=parseFloat(row[c+2])||0;}
+      else if(vt.startsWith('รวมค่าคอม')){commTotalCol=c;commRefTotal=parseFloat(row[c+1])||0;}
+      else if(vt==='สรุปรายคน'){sumHdrRow=r;nameCol=c;}
     }
     if(sumHdrRow===r&&nameCol>=0){
-      // ยอดอ้างอิง / ค่าคอม header cells are on the same row, somewhere after nameCol
+      // ยอดอ้างอิง / ค่าคอม-or-ค่ามือ header cells are on the same row, somewhere
+      // after nameCol. The amount column has been labeled both ways across
+      // different tabs/exports — accept either.
       for(let c=nameCol+1;c<row.length;c++){
         if(row[c]==='ยอดอ้างอิง')refCol=c;
-        else if(row[c]==='ค่าคอม')comCol=c;
+        else if(row[c]==='ค่าคอม'||row[c]==='ค่ามือ')comCol=c;
       }
     }
   }
@@ -1966,9 +1972,9 @@ function parseReportSheet(rows){
 
 function parseClinicReport(wb){
   const sheetNames=wb.SheetNames;
-  // "All" (combined DF+COMM view) is redundant when the split DF/COMM_SALE
-  // sheets are also present — its per-person ยอดอ้างอิง mixes DF-ref and
-  // COMM-ref together, which would overstate Revenue. Skip it in that case.
+  // "All" (combined DF+COMM view) is redundant when the split DF/COMM_SALE/
+  // COMM_DEPOSIT sheets are also present — its per-person ยอดอ้างอิง mixes
+  // DF-ref and COMM-ref together, which would overstate Revenue. Skip it then.
   const useSheets=sheetNames.length>1?sheetNames.filter(n=>n.trim().toLowerCase()!=='all'):sheetNames;
 
   const kamueMap={},revenueMap={};
@@ -1978,11 +1984,23 @@ function parseClinicReport(wb){
     const parsed=parseReportSheet(rows);
     if(!parsed)return;
     const{hasFee,hasComm,perPerson}=parsed;
-    // If a single table has BOTH fee and comm data (e.g. a combined "All"-style
-    // export read on its own, such as a CSV), only trust ค่ามือ from it —
-    // its ยอดอ้างอิง mixes DF-ref and COMM-ref together.
-    const takeRevenue=hasComm&&!(hasFee&&hasComm);
-    const takeKamue=hasFee;
+    // Sheet-name is the primary signal: a "DF..." tab is always ค่ามือ, a
+    // "COMM..." tab (COMM_SALE, COMM_DEPOSIT, or any future COMM_* split) is
+    // always commission/revenue — and multiple COMM_* tabs are summed together
+    // per staff, since deposit commission is part of total revenue same as sales.
+    // Falls back to the totals-row detection (hasFee/hasComm) for anything
+    // unnamed, e.g. a single-table CSV export read without sheet context.
+    const upperName=name.trim().toUpperCase();
+    let takeKamue,takeRevenue;
+    if(upperName.startsWith('DF')){takeKamue=true;takeRevenue=false;}
+    else if(upperName.startsWith('COMM')){takeKamue=false;takeRevenue=true;}
+    else{
+      // If a single table has BOTH fee and comm data (e.g. a combined "All"-style
+      // export read on its own, such as a CSV), only trust ค่ามือ from it —
+      // its ยอดอ้างอิง mixes DF-ref and COMM-ref together.
+      takeRevenue=hasComm&&!(hasFee&&hasComm);
+      takeKamue=hasFee;
+    }
     Object.keys(perPerson).forEach(name=>{
       if(takeKamue)kamueMap[name]=(kamueMap[name]||0)+perPerson[name].com;
       if(takeRevenue)revenueMap[name]=(revenueMap[name]||0)+perPerson[name].ref;
