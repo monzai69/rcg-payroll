@@ -945,6 +945,7 @@ const LINE_SERVER='https://rcg-payroll-line-production.up.railway.app';
 let S=[],P={},C={},A=[],AP=[],B=[],LOGOS={rcg:null,clinic:null,mode:'rcg'},SIGSTAMP={sig:null,stamp:null,showStamp:true},LVR=[];
 let _eSid=null,_eBid=null,_eAid=null,_eAPid=null;
 
+/* ══════════════════ GLOBAL STATE & DATA LOAD (Firebase sync, seed data) ══════════════════ */
 function ld(){
   try{S=JSON.parse(localStorage.getItem(SK)||'[]')}catch{S=[]}
   try{P=JSON.parse(localStorage.getItem(PK)||'{}')}catch{P={}}
@@ -974,12 +975,14 @@ function seedS(){const d=[{fn:'นราทัย',ln:'วิเชียรก�
 S=d.map((s,i)=>({id:'S'+(1001+i),wht:3,items:[],...s,st:'Active'}));svS();}
 
 const BRK=[{max:150000,r:0},{max:300000,r:.05},{max:500000,r:.10},{max:750000,r:.15},{max:1000000,r:.20},{max:2000000,r:.25},{max:5000000,r:.30},{max:Infinity,r:.35}];
+/* ══════════════════ PAYROLL CALCULATION ENGINE (calcM, evalItem, tax brackets) ══════════════════ */
 function pit(n){if(n<=0)return 0;let t=0,p=0;for(const b of BRK){if(n<=p)break;t+=(Math.min(n,b.max)-p)*b.r;p=b.max;if(b.max>=n)break}return t}
 function evalItem(item,rev,mkt,e){
   const v=parseFloat(item.val)||0;
   switch(item.type){
     case'fixed':return v;
     case'comm_flat':return rev*(v/100);
+    case'comm_flat_custom':{const base=parseFloat((e.periodic&&e.periodic[item.id])||0);return base*(v/100);}
     case'comm_tiered':{const t=(item.tiers||[]).find(x=>rev>=x.f&&rev<=x.t);return t?rev*(t.r/100):0;}
     case'comm_tiered_fixed':{const t=(item.tiers||[]).find(x=>rev>=x.f&&rev<=x.t);return t?t.r:0;}
     case'periodic':return parseFloat((e.periodic&&e.periodic[item.id])||0);
@@ -1084,6 +1087,7 @@ function calcM(s,e,key){
   }
 }
 
+/* ══════════════════ GENERAL HELPERS (formatting, dates, lookups) ══════════════════ */
 function fmt(n){
   const v=parseFloat(n)||0;
   if(v===Math.round(v))return Math.round(v).toLocaleString();
@@ -1102,6 +1106,7 @@ function empBadge(s){if(s.emptype==='fullparttime')return'<span class="badge bfp
 function isDone(s,e){if(s.emptype==='fulltime'){const hr=(s.items||[]).some(i=>['comm_flat','comm_tiered','comm_tiered_fixed'].includes(i.type));return hr?(parseFloat(e.rev)||0)>0:true;}if(s.emptype==='fullparttime')return s.fptmethod==='daily'?(parseFloat(e.days)||0)>0:(parseFloat(e.hours)||0)>0;return false;}
 const q=id=>document.getElementById(id);
 const qv=id=>{const el=q(id);return el?el.value||'':'';}
+/* ══════════════════ MODAL & DROPDOWN HELPERS ══════════════════ */
 function openM(id){q(id).classList.add('open')}
 function closeM(id){q(id).classList.remove('open')}
 
@@ -1134,6 +1139,7 @@ document.querySelectorAll('#nav .ni').forEach(ni=>{
   });
 });
 
+/* ══════════════════ DASHBOARD ══════════════════ */
 function rDash(){
   const act=S.filter(x=>x.st==='Active'),m=parseInt(qv('dash-pm'))||new Date().getMonth()+1,y=parseInt(qv('dash-py'))||new Date().getFullYear(),key=mkKey(m,y);
   q('dash-p').textContent='Period: '+MTH[m-1]+' '+y;
@@ -1234,6 +1240,7 @@ function rDash(){
 }
 q('dash-pm').addEventListener('change',rDash);q('dash-py').addEventListener('change',rDash);q('dash-rev-dept').addEventListener('change',rDash);
 
+/* ══════════════════ STAFF DIRECTORY (list, search, filters) ══════════════════ */
 function rDeptF(){q('sd').innerHTML='<option value="">All Departments</option>';(C.depts||[]).forEach(d=>{const nm=typeof d==='object'?d.name:d;const o=document.createElement('option');o.value=nm;o.textContent=nm;q('sd').appendChild(o)});q('sbr').innerHTML='<option value="">All Branches</option>';B.forEach(b=>{const o=document.createElement('option');o.value=b.id;o.textContent=b.name;q('sbr').appendChild(o)});}
 let _showInactive=false;
 function toggleInactive(){_showInactive=!_showInactive;rStaff();}
@@ -1311,6 +1318,7 @@ function syncS(){
 }
 ['s-emptype','s-fptmethod','s-pttype','s-ct'].forEach(id=>q(id).addEventListener('change',syncS));
 
+/* ══════════════════ STAFF ADD/EDIT FORM ══════════════════ */
 function openAdd(){
   _eSid=null;q('sm-title').textContent='Add Staff';q('btn-del-staff').style.display='none';
   ['s-fn','s-ln','s-nn','s-eid','s-phone','s-dept','s-br-txt','s-pos','s-base','s-ex','s-otrate','s-hrrate','s-stdhrs','s-fptdayrate','s-dhrrate','s-df','s-dayrate'].forEach(id=>{const el=q(id);if(el)el.value='';});
@@ -1377,9 +1385,11 @@ q('btn-atier').addEventListener('click',addTierRow);
 q('s-has6m').addEventListener('change',function(){q('s-6m-fields').style.display=this.checked?'block':'none';});
 q('btn-add6mtier').addEventListener('click',function(){add6mTierRow(null);});
 
+/* ══════════════════ PAY ITEMS CONFIG (item types, commission tiers) ══════════════════ */
 const ITYPES={
   fixed:'Fixed (฿/month)',
   comm_flat:'Commission % of Revenue',
+  comm_flat_custom:'Commission % of Custom Value',
   comm_tiered:'Commission Tiered (%)',
   comm_tiered_fixed:'Commission Tiered Fixed (฿)',
   periodic:'Periodic (monthly entry)'
@@ -1507,6 +1517,7 @@ function getItems(){
       tiers};
   }).filter(x=>x.name&&x.name!=='อื่นๆ');
 }
+/* ══════════════════ STAFF SAVE ══════════════════ */
 function saveStaff(){
   const et=qv('s-emptype'),brTxt=qv('s-br-txt').trim(),mb=B.find(x=>x.name===brTxt);
   const newCt=qv('s-ct');
@@ -1848,6 +1859,7 @@ function downloadStaffHistoryXLSX(){
   closeM('export-hist-modal');
 }
 
+/* ══════════════════ MONTHLY PAYROLL PAGE ══════════════════ */
 function isPayrollLocked(m,y){
   // Period locks on the 2nd day of the following month
   const today=new Date();
@@ -1927,6 +1939,7 @@ document.getElementById('csv-import-input').addEventListener('change',function()
 // Scan one sheet's rows (array-of-arrays) for the รวมค่ามือ/รวมค่าคอม totals
 // and the สรุปรายคน per-person summary block. Returns null if this sheet
 // doesn't look like a DF report table at all.
+/* ══════════════════ ค่ามือ / REVENUE IMPORT (DF Report CSV/XLSX) ══════════════════ */
 function parseReportSheet(rows){
   let feeTotalCol=-1,feeComTotal=0,commTotalCol=-1,commRefTotal=0;
   let sumHdrRow=-1,nameCol=-1,refCol=-1,comCol=-1;
@@ -2092,12 +2105,13 @@ function applyCSVImport(){
   if(status){status.style.display='block';status.style.color='#16a34a';status.textContent='✅ Imported '+applied+' staff from report';setTimeout(()=>status.style.display='none',4000);}
 }
 
+/* ══════════════════ PAYROLL CARD RENDERING ══════════════════ */
 function buildCard(s,e,key,locked){
   const dis=locked?'disabled':'';
   const c=calcM(s,e,key),isFPT=s.emptype==='fullparttime';
   const hasRev=(s.items||[]).some(i=>['comm_flat','comm_tiered','comm_tiered_fixed'].includes(i.type));
   const hasMkt=(s.items||[]).some(i=>i.type==='pct_rev');
-  const perIt=(s.items||[]).filter(i=>i.type==='periodic');
+  const perIt=(s.items||[]).filter(i=>i.type==='periodic'||i.type==='comm_flat_custom');
   const dilIt=(s.items||[]).filter(i=>i.isDiligence);
   const advP=A.filter(a=>a.staffId===s.id&&a.key===key&&a.status==='pending');
   const isResigned=s.st==='Resigned';
@@ -2117,9 +2131,9 @@ function buildCard(s,e,key,locked){
     if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';
     if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs" '+dis+'></div>';
     inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';
-    perIt.forEach(i=>{inc+='<div class="fbox rev"><label>🤝 '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';});
+    perIt.forEach(i=>{const icon=i.type==='comm_flat_custom'?'📈':'🤝';inc+='<div class="fbox rev"><label>'+icon+' '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';});
   }
-  else{if(hasRev)inc+='<div class="fbox rev"><label>📊 Revenue</label><input type="number" id="pr-rev-'+s.id+'" value="'+(e.rev||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';perIt.forEach(i=>{inc+='<div class="fbox rev"><label>🤝 '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';});if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs" '+dis+'></div>';inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';}
+  else{if(hasRev)inc+='<div class="fbox rev"><label>📊 Revenue</label><input type="number" id="pr-rev-'+s.id+'" value="'+(e.rev||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';perIt.forEach(i=>{const icon=i.type==='comm_flat_custom'?'📈':'🤝';inc+='<div class="fbox rev"><label>'+icon+' '+i.name+'</label><input type="number" id="pi-'+s.id+'-'+i.id+'" value="'+((e.periodic&&e.periodic[i.id])||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';});if(hasMkt)inc+='<div class="fbox ded"><label>📉 MKT Deduction</label><input type="number" id="pr-mkt-'+s.id+'" value="'+(e.mkt||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';if((s.otrate||0)>0)inc+='<div class="fbox ot"><label>⏱ OT hrs <span style="font-weight:400;text-transform:none;font-size:10px">('+fmt(s.otrate)+'฿/hr)</span></label><input type="number" id="pr-ot-'+s.id+'" value="'+(e.otHrs||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0 hrs" '+dis+'></div>';inc+='<div class="fbox bon"><label>🎁 Bonus</label><input type="number" id="pr-bonus-'+s.id+'" value="'+(e.bonus||'')+'" oninput="uc(\''+s.id+'\',\''+key+'\')" placeholder="0" '+dis+'></div>';}
   inc+='</div>';
   let dil='';if(dilIt.length){dil='<div style="margin-bottom:12px">';dilIt.forEach(it=>{const on=e.diligence&&e.diligence[it.id];dil+='<div class="toggle-row'+(on?' on':'')+(locked?' locked-row':'')+'" id="dr-'+s.id+'-'+it.id+'"><div><div style="font-size:13px;font-weight:600">'+it.name+'</div><div class="ts tm">'+fmt(it.val)+' ฿ · paid when criteria met</div></div><label class="switch"><input type="checkbox" '+(on?'checked':'')+' onchange="togDil(\''+s.id+'\',\''+it.id+'\',\''+key+'\',this)" '+(locked?'disabled':'')+' style="pointer-events:'+(locked?'none':'auto')+'"><span class="slider"></span></label></div>';});dil+='</div>';}
   const ded='<div class="income-grid">'+
@@ -2339,6 +2353,7 @@ function showCopyFail(btn,canvas){
   }
   setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-device-floppy" style="font-size:14px"></i>Save & Copy';btn.style.background='#1e3a5f';btn.style.borderColor='#1e3a5f';}},2500);
 }
+/* ══════════════════ 6-MONTH INCENTIVE ══════════════════ */
 function build6mBlock(s,key){
   const i6=s.incentive6m;
   if(!i6||!i6.enabled)return'';
@@ -2515,8 +2530,9 @@ function apply6mPayout(sid,key){
   if(block)block.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:#16a34a;font-size:13px;font-weight:700"><i class="ti ti-circle-check"></i>'+s.incentive6m.label+' '+fmt(amt)+' ฿ applied to Bonus!</div>';
   const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');updJump(act,key);updTopbar(act,key);
 }
+/* ══════════════════ PAYROLL CARD DATA SYNC / SAVE ALL ══════════════════ */
 function togDil(sid,iid,key,cb){if(!P[key])P[key]={};if(!P[key][sid])P[key][sid]={sid,diligence:{}};if(!P[key][sid].diligence)P[key][sid].diligence={};P[key][sid].diligence[iid]=cb.checked;const row=q('dr-'+sid+'-'+iid);if(row)row.className='toggle-row'+(cb.checked?' on':'');const s=S.find(x=>x.id===sid);if(!s)return;const e=P[key][sid];const c=calcM(s,e,key);e.net=c.net;svP();const el=q('snet-'+sid);if(el)el.textContent=fmt(c.net)+' ฿';const ae=q('acct-'+sid);if(ae)ae.innerHTML=buildAcct(s,c);const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');updJump(act,key);updTopbar(act,key);}
-function gatherE(sid){const gval=id=>{const el=q(id+'-'+sid);return el?parseFloat(el.value)||0:0};const s=S.find(x=>x.id===sid);const periodic={};(s?s.items||[]:[]).filter(i=>i.type==='periodic').forEach(i=>{const el=q('pi-'+sid+'-'+i.id);if(el)periodic[i.id]=parseFloat(el.value)||0});const ek=Object.keys(P).find(k=>P[k]&&P[k][sid]);const diligence=(ek&&P[ek][sid])?P[ek][sid].diligence||{}:{};// Read period working days override per dept (stored in P[key].deptOverrides)
+function gatherE(sid){const gval=id=>{const el=q(id+'-'+sid);return el?parseFloat(el.value)||0:0};const s=S.find(x=>x.id===sid);const periodic={};(s?s.items||[]:[]).filter(i=>i.type==='periodic'||i.type==='comm_flat_custom').forEach(i=>{const el=q('pi-'+sid+'-'+i.id);if(el)periodic[i.id]=parseFloat(el.value)||0});const ek=Object.keys(P).find(k=>P[k]&&P[k][sid]);const diligence=(ek&&P[ek][sid])?P[ek][sid].diligence||{}:{};// Read period working days override per dept (stored in P[key].deptOverrides)
   const key2=Object.keys(P).find(k=>P[k]&&P[k][sid]);
   const existE=key2&&P[key2]?P[key2][sid]:{};
   return{sid,hours:gval('pr-hrs'),days:gval('pr-days'),rev:gval('pr-rev'),mkt:gval('pr-mkt'),otHrs:gval('pr-ot'),bonus:gval('pr-bonus'),
@@ -2648,6 +2664,7 @@ function doExport(){
   a.click();
 }
 
+/* ══════════════════ PART-TIME / DOCTOR PAYMENTS ══════════════════ */
 function rAPsel(){q('apf-s').innerHTML='<option value="">All</option>';S.filter(s=>s.st==='Active'&&s.emptype==='parttime').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn+' ('+s.pos+')';q('apf-s').appendChild(o)});}
 function rAPlist(){const sf=qv('apf-s'),stf=qv('apf-st');let f=AP.filter(p=>(!sf||p.staffId===sf)&&(!stf||p.status===stf));f.sort((a,b)=>b.date.localeCompare(a.date));const cont=q('ap-list');cont.innerHTML='';if(!f.length){cont.innerHTML='<div class="card"><div class="no-data">No records</div></div>';return}f.forEach(p=>{const s=S.find(x=>x.id===p.staffId);const det=s&&s.pttype==='doctor'?(p.hours||0)+'hrs × '+fmt(p.hrrate||0)+'฿ + DF '+fmt(p.df_amt||0)+'฿':(p.days||0)+'d × '+fmt(p.dayrate||0)+'฿';const d=document.createElement('div');d.className='adv-card';d.innerHTML='<div class="av" style="width:32px;height:32px;font-size:12px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div><div style="flex:1"><div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+' <span class="badge bdocb" style="margin-left:5px">'+(s?s.pos:'')+'</span></div><div class="ts tm">'+(p.note||'')+' · '+det+' · '+p.date+'</div></div><div style="font-size:17px;font-weight:800;color:var(--doc)">'+fmt(p.net)+' ฿</div><span class="'+(p.status==='paid'?'adone':'atag')+'">'+(p.status==='paid'?'Paid':'Pending')+'</span>';const eb=document.createElement('button');eb.className='btn bo bsm';eb.innerHTML='<i class="ti ti-edit"></i>';eb.addEventListener('click',()=>openAP(p.id));d.appendChild(eb);if(p.status==='pending'){const mb=document.createElement('button');mb.className='btn bok bsm';mb.innerHTML='<i class="ti ti-check"></i>Mark Paid';mb.addEventListener('click',()=>markAP(p.id));d.appendChild(mb);}
       const cpyb=document.createElement('button');cpyb.id='apbtn-'+p.id;cpyb.style.cssText='display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer';cpyb.innerHTML='<i class="ti ti-clipboard" style="font-size:13px"></i>Copy';cpyb.addEventListener('click',()=>copyAPSummary(p.id));d.appendChild(cpyb);
@@ -2739,6 +2756,7 @@ function apCopyFallback(btn,canvas){
   setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-clipboard" style="font-size:13px"></i>Copy';btn.style.background='#f0fdf4';}},2500);
 }
 
+/* ══════════════════ ADVANCES ══════════════════ */
 function rAdvSels(){q('af-s').innerHTML='<option value="">All Staff</option>';S.filter(s=>s.st==='Active').forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.nn+' '+s.fn;q('af-s').appendChild(o)});const keys=[...new Set(A.map(a=>a.key))].filter(Boolean).sort().reverse();q('af-m').innerHTML='<option value="">All Periods</option>';keys.forEach(k=>{const[ky,km]=k.split('_');const o=document.createElement('option');o.value=k;o.textContent=MTH[parseInt(km)-1]+' '+ky;q('af-m').appendChild(o)});}
 function rAdv(){const sf=qv('af-s'),mf=qv('af-m'),stf=qv('af-st');let f=A.filter(a=>(!sf||a.staffId===sf)&&(!mf||a.key===mf)&&(!stf||a.status===stf));f.sort((a,b)=>b.date.localeCompare(a.date));const cont=q('adv-list');cont.innerHTML='';if(!f.length){cont.innerHTML='<div class="card"><div class="no-data">No records</div></div>';return}f.forEach(a=>{const s=S.find(x=>x.id===a.staffId);const[ky,km]=a.key.split('_');const d=document.createElement('div');d.className='adv-card';const remaining=a.remaining!==undefined?a.remaining:a.amt;const isInst=a.installment>0;d.innerHTML='<div class="av" style="width:30px;height:30px;font-size:11px;background:'+avbg(s?s.dept:'')+';color:'+avfg(s?s.dept:'')+'">'+(s?(s.nn||'?')[0]:'?')+'</div><div style="flex:1"><div style="font-weight:700;font-size:13px">'+(s?s.nn+' '+s.fn:'?')+'</div><div class="ts tm">'+(a.note||'-')+' · '+MTH[parseInt(km)-1]+' '+ky+'</div>'+(isInst?'<div class="ts" style="color:#92400e">Installment: '+fmt(a.installment)+' ฿/mo · Remaining: <b>'+fmt(remaining)+' ฿</b></div>':'')+'</div><div style="text-align:right"><div style="font-size:17px;font-weight:800;color:#92400e">'+fmt(a.amt)+' ฿</div>'+(isInst&&remaining<a.amt?'<div style="font-size:11px;color:#9ca3af">'+fmt(remaining)+' left</div>':'')+'</div><span class="'+(a.status==='pending'?'atag':'adone')+'">'+(a.status==='pending'?'Pending':'Deducted')+'</span>';const eb=document.createElement('button');eb.className='btn bo bsm';eb.innerHTML='<i class="ti ti-edit"></i>';eb.addEventListener('click',()=>openEditAdv(a.id));d.appendChild(eb);if(a.status==='pending'){const mb=document.createElement('button');mb.className='btn bok bsm';mb.innerHTML='<i class="ti ti-check"></i>Done';mb.addEventListener('click',()=>markAdv(a.id));d.appendChild(mb);}cont.appendChild(d);});}
 ['af-s','af-m','af-st'].forEach(id=>q(id).addEventListener('change',rAdv));
@@ -2763,6 +2781,7 @@ q('tab-docreq').addEventListener('click',function(){this.classList.add('active')
 ['ds-s','ds-m','ds-y'].forEach(id=>q(id).addEventListener('change',rPS));
 ['dc-s','dc-d','dc-rcg','dc-liv','dc-sal','dc-br'].forEach(id=>q(id).addEventListener('change',rCert));
 q('btn-print-ps').addEventListener('click',()=>doPrint('ps-print'));q('btn-print-cert').addEventListener('click',()=>doPrint('cert-print'));
+/* ══════════════════ DOCUMENTS (Pay Slip, Certificates, Print) ══════════════════ */
 function rPS(){const sid=qv('ds-s'),m=parseInt(qv('ds-m')),y=parseInt(qv('ds-y')),key=mkKey(m,y);const area=q('ps-area');if(!sid){area.innerHTML='<div class="no-data">Select a staff member</div>';return}const s=S.find(x=>x.id===sid);if(!s){area.innerHTML='';return}const e=P[key]&&P[key][sid]||{};const c=calcM(s,e,key);const ds2=s.ct==='permanent'?'<div class="dr"><span>SSO (5% × '+fmt(c.bG)+' ฿)</span><span>−'+fmt(c.sso)+' ฿</span></div>'+(c.mT>0?'<div class="dr"><span>Tax ภงด.1</span><span>−'+fmt(c.mT)+' ฿</span></div>':''):'<div class="dr"><span>WHT '+(C.wht||3)+'%</span><span>−'+fmt(c.whtD)+' ฿</span></div>';const br2=s.emptype==='fullparttime'?'<div class="dr"><span>Hours/Days worked</span><span>'+fmt(c.bG)+' ฿</span></div>':'<div class="dr"><span>Base Salary</span><span>'+fmt(c.bG)+' ฿</span></div>';const logoHtml=buildLogoHeader();area.innerHTML='<div class="dprev" id="ps-print">'+logoHtml+'<div class="dhr"><div class="dco">'+C.cth+'</div><div style="font-size:12px;color:#6b7280;margin-top:2px">Pay Slip — '+MTH[m-1]+' '+y+'</div></div><table style="width:100%;font-size:12px;margin-bottom:12px;border-collapse:collapse"><tr><td style="padding:2px 0"><b>ID:</b> '+s.id+'</td><td><b>Name:</b> '+s.fn+' '+s.ln+'</td></tr><tr><td><b>Position:</b> '+s.pos+'</td><td><b>Branch:</b> '+brN(s.br)+'</td></tr><tr><td><b>Tenure:</b> '+tenure(s.sd)+'</td><td><b>Contract:</b> '+(s.ct==='permanent'?'Permanent (ภงด.1)':s.ct)+'</td></tr></table><div class="ds"><div class="dst">Income</div>'+br2+c.rows.map(r=>'<div class="dr"><span>'+r.name+(r.isWHT?' (WHT)':'')+'</span><span>'+fmt(r.net)+' ฿</span></div>').join('')+(c.otA>0?'<div class="dr"><span>OT ('+c.otH+'hrs)</span><span>'+fmt(c.otA)+' ฿</span></div>':'')+(c.bon>0?'<div class="dr"><span>Bonus</span><span>'+fmt(c.bon)+' ฿</span></div>':'')+'<div class="dr tot"><span>Total Income</span><span>'+fmt(c.gross)+' ฿</span></div></div><div class="ds"><div class="dst">Deductions</div>'+ds2+(c.dL>0?'<div class="dr"><span>Leave</span><span>−'+fmt(c.dL)+' ฿</span></div>':'')+(c.adv>0?'<div class="dr"><span>Advance</span><span>−'+fmt(c.adv)+' ฿</span></div>':'')+(c.dO>0?'<div class="dr"><span>Other</span><span>−'+fmt(c.dO)+' ฿</span></div>':'')+'<div class="dr tot"><span>Total Deductions</span><span>−'+fmt(c.sso+c.mT+c.whtD+c.dL+c.adv+c.dO)+' ฿</span></div></div><div style="background:var(--nv);color:#fff;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:8px"><b style="font-size:14px">NET PAY</b><b style="font-size:22px;color:#fde68a">'+fmt(c.net)+' ฿</b></div>'+(s.ct==='permanent'?'<div style="font-size:11px;color:#9ca3af;text-align:right;margin-top:4px">Est. annual tax: '+fmt(c.aT)+' ฿</div>':'')+''+buildSignatureBlock(new Date().toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'}))+'</div>';}
 function rCert(){const sid=qv('dc-s'),ds3=qv('dc-d'),rG=q('dc-rcg').checked,lV=q('dc-liv').checked,sal=q('dc-sal').checked,brId=qv('dc-br');q('cert-br-row').style.display=lV?'block':'none';const area=q('cert-area');if(!sid){area.innerHTML='<div class="no-data">Select a staff member</div>';return}const s=S.find(x=>x.id===sid);if(!s){area.innerHTML='';return}const bO=brO(brId),dd=thDate(ds3),sd2=thDate(s.sd);const cn=bO.certname||bO.name||'';const logoHtml=buildLogoHeader();
 // Text header: clinic info left, company info right
@@ -2775,12 +2794,14 @@ else hdr='<div style="font-size:12px;margin-bottom:16px">'+companyBlock+'</div>'
 area.innerHTML='<div class="dprev" id="cert-print">'+logoHtml+hdr+'<div style="text-align:center;margin-bottom:15px"><div style="font-size:15px;font-weight:700;text-decoration:underline;color:var(--nv)">หนังสือรับรองพนักงาน</div></div><div style="text-align:right;font-size:12px;margin-bottom:14px;color:#6b7280">ออกให้ ณ วันที่ '+dd+'</div><div style="line-height:2.2;font-size:13px"><p>หนังสือฉบับนี้ออกให้เพื่อรับรองว่า <b>'+s.fn+' '+s.ln+'</b> เป็นพนักงานของ'+C.cth+'</p><p>ตำแหน่ง <b>'+s.pos+' · '+s.dept+'</b></p>'+(lV&&cn?'<p>ที่'+cn+'</p>':'')+(sal&&s.emptype==='fulltime'?'<p>มีอัตราเงินเดือนล่าสุด <b>'+fmt(s.base)+' บาทต่อเดือน</b> (ไม่รวมค่าคอมมิชชั่น)</p>':'')+'<p>เริ่มงาน '+sd2+' จนถึงปัจจุบัน</p><p>อายุงาน: '+tenure(s.sd)+'</p><p>จึงเรียนมาเพื่อทราบ</p></div>'+buildSignatureBlock(dd)+'</div>';}
 function doPrint(id){const el=document.getElementById(id);if(!el){alert('Please select a staff member first');return}const w=window.open('','_blank');w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet"><title>RCG</title><style>body{font-family:\'Sarabun\',sans-serif;padding:28px;font-size:13px;color:#1a1a2e;max-width:600px;margin:auto}.dr{display:flex;justify-content:space-between;padding:3px 0}.dr.tot{border-top:1.5px solid #374151;font-weight:700;margin-top:4px;padding-top:4px}@media print{@page{margin:18mm}body{padding:0}}</style></head><body>'+el.outerHTML+'<scr'+'ipt>window.onload=()=>setTimeout(()=>window.print(),500)<\/scr'+'ipt></body></html>');w.document.close();}
 
+/* ══════════════════ BRANCH SETTINGS ══════════════════ */
 function rBrCards(){q('branch-cards').innerHTML=B.map(b=>'<div class="branch-card"><div class="fx jb ic" style="margin-bottom:8px"><div style="font-weight:700;font-size:14px"><i class="ti ti-building" style="margin-right:7px;color:var(--nv)"></i>'+b.name+'</div><button class="btn bo bsm edit-br-btn" data-id="'+b.id+'"><i class="ti ti-edit"></i>Edit</button></div><div class="g2" style="font-size:12.5px;gap:7px;color:#6b7280">'+(b.addr?'<div>'+b.addr+'</div>':'<div>No address</div>')+'<div>'+(b.lic?'License: '+b.lic:'-')+(b.tel?' · '+b.tel:'')+'</div></div>'+(b.certname?'<div style="font-size:11.5px;color:#9ca3af;margin-top:4px">Cert: '+b.certname+'</div>':'')+'</div>').join('');document.querySelectorAll('.edit-br-btn').forEach(btn=>btn.addEventListener('click',function(){openBM(this.dataset.id);}));}
 function openBM(id){_eBid=id||null;q('btn-del-branch').style.display=id?'inline-flex':'none';if(id){const b=B.find(x=>x.id===id);if(!b)return;q('bm-title').textContent='Edit Branch';q('b-name').value=b.name||'';q('b-nameen')&&(q('b-nameen').value=b.nameEn||'');q('b-addr').value=b.addr||'';q('b-lic').value=b.lic||'';q('b-tel').value=b.tel||'';q('b-certname').value=b.certname||'';}else{q('bm-title').textContent='Add Branch';['b-name','b-nameen','b-addr','b-lic','b-tel','b-certname'].forEach(x=>{const el=q(x);if(el)el.value='';});}openM('bm');}
 q('btn-abranch').addEventListener('click',()=>openBM(null));q('btn-cancel-branch').addEventListener('click',()=>closeM('bm'));
 q('btn-del-branch').addEventListener('click',()=>{if(!_eBid||!confirm('Delete?'))return;B=B.filter(b=>b.id!==_eBid);svB();closeM('bm');rBrCards();popBrDl();});
 q('btn-save-branch').addEventListener('click',()=>{const nb={id:_eBid||'br'+Date.now(),name:q('b-name').value.trim(),nameEn:q('b-nameen')&&q('b-nameen').value.trim()||'',addr:q('b-addr').value.trim(),lic:q('b-lic').value.trim(),tel:q('b-tel').value.trim(),certname:q('b-certname').value.trim()};if(!nb.name){alert('Branch name required');return}if(_eBid){const i=B.findIndex(x=>x.id===_eBid);if(i>=0)B[i]=nb;else B.push(nb)}else B.push(nb);svB();closeM('bm');rBrCards();popBrDl();});
 
+/* ══════════════════ CONFIG: DEPARTMENTS & PAY ITEM NAMES ══════════════════ */
 function addDept(){const v=q('new-dept').value.trim();if(!v||(C.depts||[]).some(d=>(typeof d==='object'?d.name:d)===v))return;C.depts.push({name:v,days:26,hrs:9});svC();q('new-dept').value='';rDeptChips();popDeptDl();}
 function delDept(d){if(!confirm('Delete "'+d+'"?'))return;C.depts=C.depts.filter(x=>(typeof x==='object'?x.name:x)!==d);svC();rDeptChips();popDeptDl();}
 function rDeptChips(){
@@ -2809,6 +2830,7 @@ function addIname(){const v=q('new-iname').value.trim();if(!v||(C.itemNames||[])
 function delIname(n){C.itemNames=C.itemNames.filter(x=>x!==n);svC();rInameChips();}
 function rInameChips(){q('iname-chips').innerHTML=(C.itemNames||[]).map(n=>'<span class="chip">'+n+'<button onclick="delIname(\''+n.replace(/'/g,"\\'")+'\')">×</button></span>').join('');}
 q('btn-ainame').addEventListener('click',addIname);
+/* ══════════════════ CONFIG: COMPANY SETTINGS & DATA EXPORT/IMPORT ══════════════════ */
 function ldCfg(){q('c-cth').value=C.cth||'';q('c-cthen')&&(q('c-cthen').value=C.cthen||'');q('c-addren')&&(q('c-addren').value=C.addren||'');q('c-addr').value=C.addr||'';q('c-sgn').value=C.sgn||'';q('c-sgnen')&&(q('c-sgnen').value=C.sgnen||'');q('c-sso').value=C.sso||5;q('c-ssoc').value=C.ssoC||17500;q('c-wht').value=C.wht||3;q('c-d50').value=C.d50||100000;q('c-pers').value=C.pers||60000;}
 function saveCfg(){C.cth=q('c-cth').value;C.cthen=q('c-cthen')&&q('c-cthen').value||'';C.addren=q('c-addren')&&q('c-addren').value||'';C.addr=q('c-addr').value;C.sgn=q('c-sgn').value;C.sgnen=q('c-sgnen')&&q('c-sgnen').value||'';C.sso=parseFloat(q('c-sso').value)||5;C.ssoC=parseFloat(q('c-ssoc').value)||17500;C.wht=parseFloat(q('c-wht').value)||3;C.d50=parseFloat(q('c-d50').value)||100000;C.pers=parseFloat(q('c-pers').value)||60000;svC();alert('Saved ✓');}
 ['btn-scfg','btn-scfg2'].forEach(id=>q(id).addEventListener('click',saveCfg));
@@ -3027,6 +3049,7 @@ function initLogoHandlers(){
 
 ld();initSels();rDash();initLogoHandlers();rDocLogoModeUI();
 
+/* ══════════════════ NAVIGATION ══════════════════ */
 function toggleSidebar(){
   const sb=document.querySelector('.sb');
   const main=document.querySelector('.main');
@@ -3051,6 +3074,7 @@ function navTo(pg){
   if(pg==='docs'){popDocSels();rPS();rCert();rDocLogoModeUI();loadDocRequests();}
 }
 
+/* ══════════════════ DOCUMENT REQUESTS (LINE bot approvals) ══════════════════ */
 async function loadDocRequests(){
   const list=q('docreq-list');
   if(!list)return;
@@ -3585,6 +3609,7 @@ document.getElementById('s-ct').addEventListener('change',function(){
   if(sf)sf.style.display=this.value==='permanent'?'block':'none';
 });
 
+/* ══════════════════ AUTH / LOGIN ══════════════════ */
 function doLogin(){
   const email=document.getElementById('login-email').value.trim();
   const password=document.getElementById('login-password').value;
