@@ -133,6 +133,7 @@ input:checked+.slider:before{transform:translateX(18px)}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- Firebase -->
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js';
@@ -270,6 +271,7 @@ window.cloudLoad=async()=>{
     <div class="ni" data-pg="adv"><i class="ti ti-credit-card"></i>Advance</div>
     <div class="ni" data-pg="leave"><i class="ti ti-calendar-off"></i>Leave</div>
     <div class="ni" data-pg="docs"><i class="ti ti-file-text"></i>Documents</div>
+    <div class="ni" data-pg="reports"><i class="ti ti-chart-line"></i>Reports</div>
     <div class="ni" data-pg="cfg"><i class="ti ti-settings"></i>Settings</div>
   </div>
   <div style="flex:1"></div>
@@ -467,6 +469,68 @@ window.cloudLoad=async()=>{
       <button class="btn bo bsm" onclick="loadDocRequests()"><i class="ti ti-refresh"></i>Refresh</button>
     </div>
     <div id="docreq-list"></div>
+  </div>
+</div>
+
+<div class="pg" id="pg-reports">
+  <div class="ph"><h1>Reports</h1><p>Trends and cost analysis across your full history</p></div>
+
+  <!-- SECTION 1: Salary trend by component -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="fx jb ic" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase">📈 Salary Trend by Component</div>
+      <div class="fx g8 ic" style="flex-wrap:wrap">
+        <select id="rp1-staff" style="width:170px"></select>
+        <select id="rp1-fm" style="width:110px"></select><select id="rp1-fy" style="width:80px"></select>
+        <span style="color:#9ca3af;font-size:12px">to</span>
+        <select id="rp1-tm" style="width:110px"></select><select id="rp1-ty" style="width:80px"></select>
+      </div>
+    </div>
+    <div id="rp1-legend" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;font-size:12px;color:#6b7280"></div>
+    <div style="position:relative;height:260px"><canvas id="rp1-chart"></canvas></div>
+  </div>
+
+  <!-- SECTION 2: Revenue & ค่ามือ ranked -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="fx jb ic" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase">💰 Revenue & ค่ามือ</div>
+      <div class="fx g8 ic" style="flex-wrap:wrap">
+        <select id="rp2-metric" style="width:100px"><option value="rev">Revenue</option><option value="kT">ค่ามือ</option></select>
+        <select id="rp2-mode" style="width:120px"><option value="top">Top sellers</option><option value="all">Show everyone</option></select>
+        <select id="rp2-dept" style="width:120px"><option value="">All Depts</option></select>
+        <select id="rp2-fm" style="width:110px"></select><select id="rp2-fy" style="width:80px"></select>
+        <span style="color:#9ca3af;font-size:12px">to</span>
+        <select id="rp2-tm" style="width:110px"></select><select id="rp2-ty" style="width:80px"></select>
+      </div>
+    </div>
+    <div id="rp2-wrap" style="position:relative"><canvas id="rp2-chart"></canvas></div>
+  </div>
+
+  <!-- SECTION 3: Labor cost % of revenue -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="fx jb ic" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase">📊 Labor Cost % of Revenue</div>
+      <div class="fx g8 ic" style="flex-wrap:wrap">
+        <select id="rp3-fm" style="width:110px"></select><select id="rp3-fy" style="width:80px"></select>
+        <span style="color:#9ca3af;font-size:12px">to</span>
+        <select id="rp3-tm" style="width:110px"></select><select id="rp3-ty" style="width:80px"></select>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#9ca3af;margin-bottom:10px">Total gross payroll cost ÷ total staff revenue entered, per month. Revenue here reflects only staff with tracked individual sales — not full clinic revenue.</div>
+    <div style="position:relative;height:200px"><canvas id="rp3-chart"></canvas></div>
+  </div>
+
+  <!-- SECTION 4: Total payroll cost by branch -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="fx jb ic" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase">🏢 Total Payroll Cost by Branch</div>
+      <div class="fx g8 ic" style="flex-wrap:wrap">
+        <select id="rp4-fm" style="width:110px"></select><select id="rp4-fy" style="width:80px"></select>
+        <span style="color:#9ca3af;font-size:12px">to</span>
+        <select id="rp4-tm" style="width:110px"></select><select id="rp4-ty" style="width:80px"></select>
+      </div>
+    </div>
+    <div style="position:relative;height:220px"><canvas id="rp4-chart"></canvas></div>
   </div>
 </div>
 
@@ -1057,8 +1121,8 @@ function calcM(s,e,key){
     if(item.isDiligence&&!(e.diligence&&e.diligence[item.id]))return;
     const gross=evalItem(item,rev,mkt,e);
     const isK=item.name==='ค่ามือ';
-    if(item.isWHT){const wht=gross*iWhtR;rows.push({name:item.name,net:gross-wht,isWHT:true,isDiligence:!!item.isDiligence});gI+=gross-wht;if(isK)kT+=gross-wht;}
-    else{rows.push({name:item.name,net:gross,isWHT:false,isDiligence:!!item.isDiligence});gI+=gross;if(isK)kT+=gross;}
+    if(item.isWHT){const wht=gross*iWhtR;rows.push({name:item.name,type:item.type,net:gross-wht,isWHT:true,isDiligence:!!item.isDiligence});gI+=gross-wht;if(isK)kT+=gross-wht;}
+    else{rows.push({name:item.name,type:item.type,net:gross,isWHT:false,isDiligence:!!item.isDiligence});gI+=gross;if(isK)kT+=gross;}
   });
   const gross=effBase+(gI-dLitems)+otA+bon;
   const advP=key?A.filter(a=>a.staffId===s.id&&a.key===key&&a.status==='pending'):[];
@@ -1148,7 +1212,7 @@ document.querySelectorAll('#nav .ni').forEach(ni=>{
     const pg=this.dataset.pg;
     document.querySelectorAll('#nav .ni').forEach(n=>n.classList.remove('active'));this.classList.add('active');
     document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));q('pg-'+pg).classList.add('active');
-    if(pg==='dash')rDash();if(pg==='staff'){rStaff();rDeptF();}if(pg==='pay')rPay();if(pg==='anytime'){rAPsel();rAPlist();}if(pg==='adv'){rAdvSels();rAdv();}if(pg==='leave'){initLeaveSelectors();rLeavePage();}if(pg==='docs'){popDocSels();rPS();rCert();rDocLogoModeUI();}if(pg==='cfg'){ldCfg();rDeptChips();rInameChips();rBrCards();rLogoSettings();}
+    if(pg==='dash')rDash();if(pg==='staff'){rStaff();rDeptF();}if(pg==='pay')rPay();if(pg==='anytime'){rAPsel();rAPlist();}if(pg==='adv'){rAdvSels();rAdv();}if(pg==='leave'){initLeaveSelectors();rLeavePage();}if(pg==='docs'){popDocSels();rPS();rCert();rDocLogoModeUI();}if(pg==='reports')initReportsPage();if(pg==='cfg'){ldCfg();rDeptChips();rInameChips();rBrCards();rLogoSettings();}
   });
 });
 
@@ -1737,17 +1801,33 @@ async function loadHistoryTab(sid){
 function openExportHistModal(sid){
   _exportHistSid=sid;
   const y=new Date().getFullYear(),cm=new Date().getMonth()+1;
-  ['eh-fm','eh-tm'].forEach(id=>{
-    const el=q(id);el.innerHTML='';
+  initRangePicker('eh-fm','eh-fy','eh-tm','eh-ty',1,y,cm,y);
+  openM('export-hist-modal');
+}
+
+// Shared helper: build ordered list of {m,y} periods between two month/year points (inclusive)
+function buildPeriodRange(fromM,fromY,toM,toY){
+  const periods=[];
+  let y=fromY,m=fromM;
+  while(y<toY||(y===toY&&m<=toM)){
+    periods.push({m,y});
+    m++;if(m>12){m=1;y++;}
+  }
+  return periods;
+}
+// Shared helper: populate a From/To month+year picker (4 selects) with a sensible default range
+function initRangePicker(fmId,fyId,tmId,tyId,defaultFromM,defaultFromY,defaultToM,defaultToY){
+  const y=new Date().getFullYear();
+  [fmId,tmId].forEach(id=>{
+    const el=q(id);if(!el)return;el.innerHTML='';
     MTH.forEach((m,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=m;el.appendChild(o);});
   });
-  ['eh-fy','eh-ty'].forEach(id=>{
-    const el=q(id);el.innerHTML='';
+  [fyId,tyId].forEach(id=>{
+    const el=q(id);if(!el)return;el.innerHTML='';
     for(let i=y-2;i<=y+1;i++){const o=document.createElement('option');o.value=i;o.textContent=i;el.appendChild(o);}
   });
-  q('eh-fm').value=1;q('eh-fy').value=y;       // default: January this year
-  q('eh-tm').value=cm;q('eh-ty').value=y;      // ...to current month
-  openM('export-hist-modal');
+  q(fmId)&&(q(fmId).value=defaultFromM);q(fyId)&&(q(fyId).value=defaultFromY);
+  q(tmId)&&(q(tmId).value=defaultToM);q(tyId)&&(q(tyId).value=defaultToY);
 }
 
 function downloadStaffHistoryXLSX(){
@@ -1756,12 +1836,7 @@ function downloadStaffHistoryXLSX(){
   if(fromY>toY||(fromY===toY&&fromM>toM)){alert('"From" period must be before or equal to "To" period.');return;}
 
   // Build the list of {m,y} periods in range, oldest first
-  const periods=[];
-  let y=fromY,m=fromM;
-  while(y<toY||(y===toY&&m<=toM)){
-    periods.push({m,y});
-    m++;if(m>12){m=1;y++;}
-  }
+  const periods=buildPeriodRange(fromM,fromY,toM,toY);
 
   // Pass 1: compute calcM() for every period, and collect the union of pay-item
   // names in first-seen order (this staff's actual item names — including if they
@@ -2816,6 +2891,124 @@ else hdr='<div style="font-size:12px;margin-bottom:16px">'+companyBlock+'</div>'
 area.innerHTML='<div class="dprev" id="cert-print">'+logoHtml+hdr+'<div style="text-align:center;margin-bottom:15px"><div style="font-size:15px;font-weight:700;text-decoration:underline;color:var(--nv)">หนังสือรับรองพนักงาน</div></div><div style="text-align:right;font-size:12px;margin-bottom:14px;color:#6b7280">ออกให้ ณ วันที่ '+dd+'</div><div style="line-height:2.2;font-size:13px"><p>หนังสือฉบับนี้ออกให้เพื่อรับรองว่า <b>'+s.fn+' '+s.ln+'</b> เป็นพนักงานของ'+C.cth+'</p><p>ตำแหน่ง <b>'+s.pos+' · '+s.dept+'</b></p>'+(lV&&cn?'<p>ที่'+cn+'</p>':'')+(sal&&s.emptype==='fulltime'?'<p>มีอัตราเงินเดือนล่าสุด <b>'+fmt(s.base)+' บาทต่อเดือน</b> (ไม่รวมค่าคอมมิชชั่น)</p>':'')+'<p>เริ่มงาน '+sd2+' จนถึงปัจจุบัน</p><p>อายุงาน: '+tenure(s.sd)+'</p><p>จึงเรียนมาเพื่อทราบ</p></div>'+buildSignatureBlock(dd)+'</div>';}
 function doPrint(id){const el=document.getElementById(id);if(!el){alert('Please select a staff member first');return}const w=window.open('','_blank');w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet"><title>RCG</title><style>body{font-family:\'Sarabun\',sans-serif;padding:28px;font-size:13px;color:#1a1a2e;max-width:600px;margin:auto}.dr{display:flex;justify-content:space-between;padding:3px 0}.dr.tot{border-top:1.5px solid #374151;font-weight:700;margin-top:4px;padding-top:4px}@media print{@page{margin:18mm}body{padding:0}}</style></head><body>'+el.outerHTML+'<scr'+'ipt>window.onload=()=>setTimeout(()=>window.print(),500)<\/scr'+'ipt></body></html>');w.document.close();}
 
+/* ══════════════════ REPORTS PAGE ══════════════════ */
+let _rpCharts={}; // Chart.js instances, keyed by canvas id — destroyed/recreated on re-render
+const RP_COMM_TYPES=['comm_flat','comm_tiered','comm_tiered_fixed','comm_flat_custom'];
+function rpDrawChart(canvasId,config){
+  if(_rpCharts[canvasId])_rpCharts[canvasId].destroy();
+  _rpCharts[canvasId]=new Chart(q(canvasId),config);
+}
+let _reportsInited=false;
+function initReportsPage(){
+  const y=new Date().getFullYear(),cm=new Date().getMonth()+1;
+  if(!_reportsInited){
+    // Staff selector for report 1
+    const staffSel=q('rp1-staff');
+    staffSel.innerHTML=S.filter(s=>s.st==='Active').map(s=>'<option value="'+s.id+'">'+s.nn+' '+s.fn+'</option>').join('');
+    // Department filter for report 2
+    const deptSel=q('rp2-dept');
+    deptSel.innerHTML='<option value="">All Depts</option>'+(C.depts||[]).map(d=>{const nm=typeof d==='object'?d.name:d;return'<option value="'+nm+'">'+nm+'</option>';}).join('');
+    // Range pickers — default Jan this year → current month
+    initRangePicker('rp1-fm','rp1-fy','rp1-tm','rp1-ty',1,y,cm,y);
+    initRangePicker('rp2-fm','rp2-fy','rp2-tm','rp2-ty',cm,y,cm,y); // report 2 defaults to current month only, like the old dashboard chart
+    initRangePicker('rp3-fm','rp3-fy','rp3-tm','rp3-ty',1,y,cm,y);
+    initRangePicker('rp4-fm','rp4-fy','rp4-tm','rp4-ty',1,y,cm,y);
+    ['rp1-staff','rp1-fm','rp1-fy','rp1-tm','rp1-ty'].forEach(id=>q(id).addEventListener('change',rReport1));
+    ['rp2-metric','rp2-mode','rp2-dept','rp2-fm','rp2-fy','rp2-tm','rp2-ty'].forEach(id=>q(id).addEventListener('change',rReport2));
+    ['rp3-fm','rp3-fy','rp3-tm','rp3-ty'].forEach(id=>q(id).addEventListener('change',rReport3));
+    ['rp4-fm','rp4-fy','rp4-tm','rp4-ty'].forEach(id=>q(id).addEventListener('change',rReport4));
+    _reportsInited=true;
+  }
+  rReport1();rReport2();rReport3();rReport4();
+}
+
+// ── Report 1: Salary trend by component ──
+function rReport1(){
+  const sid=qv('rp1-staff');const s=S.find(x=>x.id===sid);if(!s)return;
+  const fromM=parseInt(qv('rp1-fm')),fromY=parseInt(qv('rp1-fy')),toM=parseInt(qv('rp1-tm')),toY=parseInt(qv('rp1-ty'));
+  if(fromY>toY||(fromY===toY&&fromM>toM))return;
+  const periods=buildPeriodRange(fromM,fromY,toM,toY);
+  const labels=[],base=[],fixedInc=[],comm=[],kamue=[],net=[];
+  periods.forEach(({m,y})=>{
+    const key=mkKey(m,y);const e=(P[key]&&P[key][sid])||{};const c=calcM(s,e,key);
+    labels.push(MTH[m-1].slice(0,3)+' '+y);
+    base.push(c.bG);
+    kamue.push(c.kT);
+    let commSum=0,fixedSum=0;
+    (c.rows||[]).forEach(r=>{
+      if(r.name==='ค่ามือ')return; // already counted in kT
+      if(RP_COMM_TYPES.includes(r.type))commSum+=r.net;else fixedSum+=r.net;
+    });
+    comm.push(commSum);fixedInc.push(fixedSum);
+    net.push(c.net);
+  });
+  q('rp1-legend').innerHTML=[
+    ['#2a78d6','Base'],['#1baf7a','Other fixed items'],['#eda100','Commission'],['#e87ba4','ค่ามือ'],['#0b0b0b','Net pay']
+  ].map(([c2,l])=>'<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:'+c2+'"></span>'+l+'</span>').join('');
+  rpDrawChart('rp1-chart',{type:'line',data:{labels,datasets:[
+    {label:'Base',data:base,borderColor:'#2a78d6',borderWidth:2,pointRadius:2,tension:0},
+    {label:'Other fixed items',data:fixedInc,borderColor:'#1baf7a',borderWidth:2,pointRadius:2,tension:0},
+    {label:'Commission',data:comm,borderColor:'#eda100',borderWidth:2,pointRadius:2,tension:0},
+    {label:'ค่ามือ',data:kamue,borderColor:'#e87ba4',borderWidth:2,pointRadius:2,tension:0},
+    {label:'Net pay',data:net,borderColor:'#0b0b0b',borderWidth:2,borderDash:[4,3],pointRadius:0,tension:0}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.parsed.y)+' ฿'}}},scales:{y:{ticks:{callback:v=>fmt(v)}}}}});
+}
+
+// ── Report 2: Revenue & ค่ามือ, ranked or everyone ──
+function rReport2(){
+  const metric=qv('rp2-metric'),mode=qv('rp2-mode'),dept=qv('rp2-dept');
+  const fromM=parseInt(qv('rp2-fm')),fromY=parseInt(qv('rp2-fy')),toM=parseInt(qv('rp2-tm')),toY=parseInt(qv('rp2-ty'));
+  if(fromY>toY||(fromY===toY&&fromM>toM))return;
+  const periods=buildPeriodRange(fromM,fromY,toM,toY);
+  const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime'&&(!dept||s.dept===dept));
+  const totals=act.map(s=>{
+    let sum=0;
+    periods.forEach(({m,y})=>{
+      const key=mkKey(m,y);const e=(P[key]&&P[key][s.id])||{};const c=calcM(s,e,key);
+      sum+=metric==='rev'?(parseFloat(e.rev)||0):c.kT;
+    });
+    return{s,sum};
+  }).filter(x=>x.sum>0).sort((a,b)=>b.sum-a.sum);
+  const shown=mode==='top'?totals.slice(0,10):totals;
+  const wrap=q('rp2-wrap');wrap.style.height=Math.max(180,shown.length*32+60)+'px';
+  const label=metric==='rev'?'Revenue':'ค่ามือ';
+  rpDrawChart('rp2-chart',{type:'bar',data:{labels:shown.map(x=>x.s.nn+' '+x.s.fn),datasets:[{label,data:shown.map(x=>x.sum),backgroundColor:metric==='rev'?'#2a78d6':'#e87ba4',borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.parsed.x)+' ฿'}}},scales:{x:{ticks:{callback:v=>fmt(v)}}}}});
+}
+
+// ── Report 3: Labor cost % of revenue, company-wide ──
+function rReport3(){
+  const fromM=parseInt(qv('rp3-fm')),fromY=parseInt(qv('rp3-fy')),toM=parseInt(qv('rp3-tm')),toY=parseInt(qv('rp3-ty'));
+  if(fromY>toY||(fromY===toY&&fromM>toM))return;
+  const periods=buildPeriodRange(fromM,fromY,toM,toY);
+  const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');
+  const labels=[],ratio=[];
+  periods.forEach(({m,y})=>{
+    const key=mkKey(m,y);let cost=0,rev=0;
+    act.forEach(s=>{const e=(P[key]&&P[key][s.id])||{};const c=calcM(s,e,key);cost+=c.gross;rev+=parseFloat(e.rev)||0;});
+    labels.push(MTH[m-1].slice(0,3)+' '+y);
+    ratio.push(rev>0?(cost/rev*100):0);
+  });
+  rpDrawChart('rp3-chart',{type:'line',data:{labels,datasets:[{data:ratio,borderColor:'#eb6834',backgroundColor:'rgba(235,104,52,0.08)',fill:true,borderWidth:2,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y.toFixed(1)+'%'}}},scales:{y:{ticks:{callback:v=>v+'%'}}}}});
+}
+
+// ── Report 4: Total payroll cost by branch ──
+function rReport4(){
+  const fromM=parseInt(qv('rp4-fm')),fromY=parseInt(qv('rp4-fy')),toM=parseInt(qv('rp4-tm')),toY=parseInt(qv('rp4-ty'));
+  if(fromY>toY||(fromY===toY&&fromM>toM))return;
+  const periods=buildPeriodRange(fromM,fromY,toM,toY);
+  const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');
+  const brIds=[...new Set(act.map(s=>s.br))];
+  const labels=[];const byBranch={};brIds.forEach(b=>byBranch[b]=[]);
+  periods.forEach(({m,y})=>{
+    const key=mkKey(m,y);labels.push(MTH[m-1].slice(0,3)+' '+y);
+    const sums={};brIds.forEach(b=>sums[b]=0);
+    act.forEach(s=>{const e=(P[key]&&P[key][s.id])||{};const c=calcM(s,e,key);sums[s.br]=(sums[s.br]||0)+c.gross;});
+    brIds.forEach(b=>byBranch[b].push(sums[b]));
+  });
+  const palette=['#2a78d6','#1baf7a','#eda100','#e87ba4'];
+  rpDrawChart('rp4-chart',{type:'bar',data:{labels,datasets:brIds.map((b,i)=>({label:brN(b),data:byBranch[b],backgroundColor:palette[i%palette.length]}))},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true,ticks:{callback:v=>fmt(v)}}},plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:10,font:{size:11}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.parsed.y)+' ฿'}}}}});
+}
+
 /* ══════════════════ BRANCH SETTINGS ══════════════════ */
 function rBrCards(){q('branch-cards').innerHTML=B.map(b=>'<div class="branch-card"><div class="fx jb ic" style="margin-bottom:8px"><div style="font-weight:700;font-size:14px"><i class="ti ti-building" style="margin-right:7px;color:var(--nv)"></i>'+b.name+'</div><button class="btn bo bsm edit-br-btn" data-id="'+b.id+'"><i class="ti ti-edit"></i>Edit</button></div><div class="g2" style="font-size:12.5px;gap:7px;color:#6b7280">'+(b.addr?'<div>'+b.addr+'</div>':'<div>No address</div>')+'<div>'+(b.lic?'License: '+b.lic:'-')+(b.tel?' · '+b.tel:'')+'</div></div>'+(b.certname?'<div style="font-size:11.5px;color:#9ca3af;margin-top:4px">Cert: '+b.certname+'</div>':'')+'</div>').join('');document.querySelectorAll('.edit-br-btn').forEach(btn=>btn.addEventListener('click',function(){openBM(this.dataset.id);}));}
 function openBM(id){_eBid=id||null;q('btn-del-branch').style.display=id?'inline-flex':'none';if(id){const b=B.find(x=>x.id===id);if(!b)return;q('bm-title').textContent='Edit Branch';q('b-name').value=b.name||'';q('b-nameen')&&(q('b-nameen').value=b.nameEn||'');q('b-addr').value=b.addr||'';q('b-lic').value=b.lic||'';q('b-tel').value=b.tel||'';q('b-certname').value=b.certname||'';}else{q('bm-title').textContent='Add Branch';['b-name','b-nameen','b-addr','b-lic','b-tel','b-certname'].forEach(x=>{const el=q(x);if(el)el.value='';});}openM('bm');}
@@ -3094,6 +3287,7 @@ function navTo(pg){
   if(pg==='leave'){initLeaveSelectors();rLeavePage();}
   if(pg==='adv'){rAdvSels();rAdv();}
   if(pg==='docs'){popDocSels();rPS();rCert();rDocLogoModeUI();loadDocRequests();}
+  if(pg==='reports')initReportsPage();
 }
 
 /* ══════════════════ DOCUMENT REQUESTS (LINE bot approvals) ══════════════════ */
