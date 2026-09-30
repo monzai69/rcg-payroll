@@ -1950,10 +1950,27 @@ function downloadStaffHistoryXLSX(){
 
 /* ══════════════════ MONTHLY PAYROLL PAGE ══════════════════ */
 function isPayrollLocked(m,y){
+  const key=mkKey(m,y);
+  if(P[key]&&P[key]._meta&&P[key]._meta.unlocked)return false; // admin override
   // Period locks on the 2nd day of the following month
   const today=new Date();
   const lockDate=new Date(y,m,2); // month is 0-based in JS, so m (1-based) = next month
   return today>=lockDate;
+}
+
+function unlockPeriod(m,y){
+  const key=mkKey(m,y);
+  if(!confirm('Unlock '+MTH[m-1]+' '+y+' for editing? This period was locked because it\'s in the past — only do this if you specifically need to correct or backfill data for this period.'))return;
+  if(!P[key])P[key]={};
+  if(!P[key]._meta)P[key]._meta={};
+  P[key]._meta.unlocked=true;
+  svP();rPay();
+}
+function relockPeriod(m,y){
+  const key=mkKey(m,y);
+  if(!confirm('Re-lock '+MTH[m-1]+' '+y+'? This will prevent further edits unless unlocked again.'))return;
+  if(P[key]&&P[key]._meta)P[key]._meta.unlocked=false;
+  svP();rPay();
 }
 
 function rPay(){
@@ -1963,6 +1980,8 @@ function rPay(){
   if(_lbl)_lbl.textContent=MTH[_pm-1]+' '+_py;
   const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);if(!P[key])P[key]={};
   const locked=isPayrollLocked(m,y);
+  const naturallyPast=new Date()>=new Date(y,m,2); // would be locked by date, regardless of manual override
+  const manuallyUnlocked=!!(P[key]._meta&&P[key]._meta.unlocked);
   // Show/hide lock banner
   let lockBanner=q('pay-lock-banner');
   if(!lockBanner){
@@ -1972,11 +1991,17 @@ function rPay(){
     topbar&&topbar.parentNode.insertBefore(lockBanner,topbar);
   }
   if(locked){
-    lockBanner.style.cssText='background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#991b1b';
-    lockBanner.innerHTML='🔒 This period is locked — payroll for '+MTH[m-1]+' '+y+' cannot be edited (locked after 1st of next month).';
+    lockBanner.style.cssText='background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:600;color:#991b1b';
+    lockBanner.innerHTML='<span>🔒 This period is locked — payroll for '+MTH[m-1]+' '+y+' cannot be edited (locked after 1st of next month).</span><button class="btn bsm" style="background:#991b1b;color:#fff" onclick="unlockPeriod('+m+','+y+')">🔓 Unlock this period</button>';
     q('btn-saveall').disabled=true;
     q('btn-saveall').style.opacity='0.4';
     q('btn-saveall').style.cursor='not-allowed';
+  }else if(naturallyPast&&manuallyUnlocked){
+    lockBanner.style.cssText='background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:600;color:#92400e';
+    lockBanner.innerHTML='<span>🔓 '+MTH[m-1]+' '+y+' is manually unlocked for editing — remember to re-lock when you\'re done.</span><button class="btn bsm bo" onclick="relockPeriod('+m+','+y+')">🔒 Re-lock this period</button>';
+    q('btn-saveall').disabled=false;
+    q('btn-saveall').style.opacity='';
+    q('btn-saveall').style.cursor='';
   }else{
     lockBanner.style.display='none';
     q('btn-saveall').disabled=false;
