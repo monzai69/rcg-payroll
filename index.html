@@ -188,8 +188,23 @@ window.cloudSave=async(key,data)=>{
     const arr=typeof data==='string'?JSON.parse(data):data;
     await window.fbSet('config',col,{data:JSON.stringify(arr),updatedAt:Date.now()});
   } else if(col==='payroll'){
+    // CONFLICT GUARD: never overwrite a version saved by another tab/device
+    // after this page loaded. Saving blind is how corrections got destroyed.
+    const cur=await window.fbGet('config','payroll');
+    const curStamp=cur?(cur.updatedAt||0):0;
+    if(curStamp&&window._payStamp!==undefined&&window._payStamp!==null&&curStamp!==window._payStamp){
+      if(!window._payConflictWarned){
+        window._payConflictWarned=true;
+        alert('⚠️ Payroll data was changed from another tab or device after this page loaded.\n\nYour latest change was NOT saved to the cloud (to avoid destroying the newer data).\n\nPlease RELOAD this page, then redo your change.');
+      }
+      const el=document.getElementById('sync-status');
+      if(el){el.textContent='⚠️ Not saved — data changed elsewhere, reload the page';el.style.color='#e24b4a';el.style.display='block';}
+      return;
+    }
     const obj=typeof data==='string'?JSON.parse(data):data;
-    await window.fbSet('config','payroll',{data:JSON.stringify(obj),updatedAt:Date.now()});
+    const stamp=Date.now();
+    await window.fbSet('config','payroll',{data:JSON.stringify(obj),updatedAt:stamp});
+    window._payStamp=stamp;
   } else {
     const obj=typeof data==='string'?JSON.parse(data):data;
     await window.fbSet('config',col,obj);
@@ -210,7 +225,9 @@ window.cloudLoad=async()=>{
     const [staff,payroll,company,advance,anytime,branches,logos,sigstamp]=results;
     let loaded=false;
     if(staff&&staff.data){try{S=JSON.parse(staff.data);localStorage.setItem(SK,staff.data);loaded=true;}catch{}}
-    if(payroll&&payroll.data){try{P=JSON.parse(payroll.data);localStorage.setItem(PK,payroll.data);loaded=true;}catch{}}
+    if(payroll&&payroll.data){try{P=JSON.parse(payroll.data);localStorage.setItem(PK,payroll.data);loaded=true;window._payStamp=payroll.updatedAt||null;}catch{}}
+    // Publish meta (published flag + confirmations) — server-owned, read-only here
+    try{const pm=await window.fbGet('config','publish_meta');window.PUB=pm&&pm.data?JSON.parse(pm.data):{};}catch{window.PUB={};}
     if(company&&company.cth){C=company;localStorage.setItem(CK,JSON.stringify(company));loaded=true;}
     if(advance&&advance.data){try{A=JSON.parse(advance.data);localStorage.setItem(AK,advance.data);}catch{}}
     if(anytime&&anytime.data){try{AP=JSON.parse(anytime.data);localStorage.setItem(APK,anytime.data);}catch{}}
@@ -1032,7 +1049,33 @@ function ld(){
   svS();
 }
 const sv=(k,v)=>{const s=JSON.stringify(v);localStorage.setItem(k,s);if(window.cloudSave)window.cloudSave(k,s);else window.addEventListener('fbready',()=>window.cloudSave(k,s),{once:true});};
-const svS=()=>sv(SK,S),svP=()=>sv(PK,P),svC=()=>sv(CK,C),svA=()=>sv(AK,A),svAP=()=>sv(APK,AP),svB=()=>sv(BK,B),svL=()=>sv(LK,LOGOS),svSS=()=>sv(SSK,SIGSTAMP),svLV=()=>sv(LVRK,LVR);
+const svS=()=>sv(SK,S),svC=()=>sv(CK,C),svA=()=>sv(AK,A),svAP=()=>sv(APK,AP),svB=()=>sv(BK,B),svL=()=>sv(LK,LOGOS),svSS=()=>sv(SSK,SIGSTAMP),svLV=()=>sv(LVRK,LVR);
+// Payroll saves are debounced: localStorage immediately, cloud after typing
+// pauses (1.2s) — one guarded write instead of a race on every keystroke.
+let _svPTimer=null;
+const svP=()=>{
+  localStorage.setItem(PK,JSON.stringify(P));
+  clearTimeout(_svPTimer);
+  _svPTimer=setTimeout(()=>{
+    const s=JSON.stringify(P);
+    if(window.cloudSave)window.cloudSave(PK,s);
+    else window.addEventListener('fbready',()=>window.cloudSave(PK,s),{once:true});
+  },1200);
+};
+// Publish meta helpers — PUB is server-owned; the web app only reads it
+function getPubMeta(key){
+  if(window.PUB&&window.PUB[key]!==undefined)return window.PUB[key];
+  return (P[key]&&P[key]._meta)||null; // legacy fallback (pre-migration periods)
+}
+function isConf(key,sid){
+  const m=window.PUB&&window.PUB[key];
+  if(m&&m.confirmations&&m.confirmations[sid])return !!m.confirmations[sid].confirmed;
+  return !!(P[key]&&P[key][sid]&&P[key][sid].confirmed); // legacy fallback
+}
+const flushP=()=>{clearTimeout(_svPTimer);const s=JSON.stringify(P);localStorage.setItem(PK,s);if(window.cloudSave)window.cloudSave(PK,s);};
+async function reloadPubMeta(){
+  try{const pm=await window.fbGet('config','publish_meta');window.PUB=pm&&pm.data?JSON.parse(pm.data):{};}catch{}
+}
 
 function seedB(){B=[{id:'br1',name:'RCG Silom',addr:'496/14 ถนนสาธุประดิษฐ์',lic:'',tel:'',certname:''},{id:'br2',name:'LIV Clinic Samui',addr:'เกาะสมุย จังหวัดสุราษฎร์ธานี',lic:'10101028777',tel:'',certname:'ลีฟ คลินิกเวชกรรม สาขาเกาะสมุย'},{id:'br3',name:'Carebox',addr:'',lic:'',tel:'',certname:''}];svB()}
 function seedS(){const d=[{fn:'นราทัย',ln:'วิเชียรกัลยารัตน์',nn:'ไท่',dept:'CEO',pos:'CEO',br:'br1',sd:'2021-08-18',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'สมน',ln:'สถิตยางกูร',nn:'มน',dept:'COO',pos:'COO-CFO',br:'br1',sd:'2021-08-18',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'มาเรีย',ln:'อาลี',nn:'ลูกตาล',dept:'Marketing',pos:'Graphic',br:'br1',sd:'2021-09-01',base:14500,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ตะวันฉาย',ln:'คีรีนาวงศ์',nn:'เก๋',dept:'Operation',pos:'Admin',br:'br1',sd:'2022-01-15',base:12000,emptype:'fulltime',ct:'permanent',ex:0,otrate:75,items:[{id:'i1',name:'ค่าตำแหน่ง',type:'fixed',val:2500,isWHT:false,isDiligence:false}]},{fn:'นพรัตน์',ln:'เรืองโรจน์',nn:'แนตตี้',dept:'Marketing',pos:'Marketing Manager',br:'br1',sd:'2022-08-01',base:43000,emptype:'fulltime',ct:'permanent',ex:0,otrate:0,items:[{id:'i1',name:'Incentive',type:'comm_flat',val:0.3,isWHT:false,isDiligence:false}]},{fn:'อิงวรินทร์',ln:'เปตามานัง',nn:'บุ๋ม',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2023-10-01',base:15000,emptype:'fulltime',ct:'permanent',ex:0,otrate:0,items:[{id:'id1',name:'ค่าตำแหน่ง',type:'fixed',val:2000,isWHT:false,isDiligence:false},{id:'id2',name:'ค่ามือ',type:'comm_flat',val:2,isWHT:true,isDiligence:false,tiers:[]},{id:'id3',name:'เบี้ยขยัน',type:'fixed',val:1000,isWHT:false,isDiligence:true}]},{fn:'สุภาพ',ln:'โตมา',nn:'แย้ม',dept:'Operation',pos:'House Keeper',br:'br2',sd:'2023-09-15',base:12000,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ฐิตารีย์',ln:'ปรีชาบารมีสุข',nn:'ขวัญ',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2024-01-02',base:15000,emptype:'fulltime',ct:'permanent',ex:0,otrate:63,items:[{id:'i1',name:'Support',type:'fixed',val:1000,isWHT:false,isDiligence:false},{id:'i2',name:'ค่ามือ',type:'comm_flat',val:1.5,isWHT:true,isDiligence:false,tiers:[]}]},{fn:'ไลลา',ln:'กาหมัน',nn:'ไลลา',dept:'Operation',pos:'Sales',br:'br2',sd:'2024-01-13',base:16500,emptype:'fulltime',ct:'permanent',ex:0,otrate:69,items:[{id:'i1',name:'ค่ามือ',type:'comm_tiered',val:0,isWHT:true,isDiligence:false,tiers:[{f:0,t:399999,r:1.5},{f:400000,t:799999,r:2},{f:800000,t:9999999,r:2.5}]}]},{fn:'สุพิชชา',ln:'ทองดา',nn:'หนูนา',dept:'Operation',pos:'Nurse',br:'br2',sd:'2024-04-04',base:0,emptype:'fullparttime',fptmethod:'hourly',hrrate:100,stdhrs:160,ct:'contract',ex:0,otrate:0},{fn:'วีรศักดิ์',ln:'แตงอ่อน',nn:'แชมป์',dept:'Marketing',pos:'Graphic',br:'br1',sd:'2024-05-27',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'แพทย์หญิงสุชากานต์',ln:'โรจน์สราญรมย์',nn:'น้ำ',dept:'Operation',pos:'Doctor',br:'br2',sd:'2024-09-25',base:0,emptype:'parttime',pttype:'doctor',hrrate:500,dhrs:7,df:15,ct:'freelance',ex:0,otrate:0},{fn:'อังศิณา',ln:'ขอยื้อกลาง',nn:'แหม่ม',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2025-01-11',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'Pheth',ln:'Omsene',nn:'นาง',dept:'Operation',pos:'House Keeper',br:'br2',sd:'2025-05-01',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'แพทย์หญิงชิตพัณน์',ln:'ปรีชาทรัพย์',nn:'ต้อง',dept:'Operation',pos:'Doctor',br:'br1',sd:'2026-01-02',base:0,emptype:'parttime',pttype:'doctor',hrrate:500,dhrs:7,df:15,ct:'freelance',ex:0,otrate:0},{fn:'สุพรรณี',ln:'วรนาฏ',nn:'ชบา',dept:'Operation',pos:'Nurse',br:'br2',sd:'2026-01-03',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'จิตสุภา',ln:'พวงยี่สุ้น',nn:'กุ๊กกิ๊ก',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2026-04-21',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'เจณณิษฐา',ln:'โชติวัชร์หิรัญ',nn:'คิม',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2026-03-27',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'วรรณชนก',ln:'เลิศธนกิจไพศาล',nn:'โบ',dept:'Operation',pos:'Beauty Therapist',br:'br2',sd:'2026-05-02',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'นายแพทย์สันติพัฒน์',ln:'จันทร์หอม',nn:'ทัช',dept:'Operation',pos:'Doctor',br:'br1',sd:'2026-03-29',base:0,emptype:'parttime',pttype:'doctor',hrrate:500,dhrs:7,df:15,ct:'freelance',ex:0,otrate:0},{fn:'พีรนนท์',ln:'นวลหนู',nn:'นัน',dept:'Operation',pos:'Digital Marketing',br:'br1',sd:'2025-08-04',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ธนัทวดี',ln:'แก้วจอมสิน',nn:'กรีน',dept:'Operation',pos:'Admin',br:'br1',sd:'2026-01-26',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ธนาลักษณ์',ln:'ฉลูทอง',nn:'หญิง',dept:'Operation',pos:'Nurse',br:'br2',sd:'2026-04-18',base:0,emptype:'fullparttime',fptmethod:'hourly',hrrate:90,stdhrs:160,ct:'contract',ex:0,otrate:0},{fn:'พรรณวษา',ln:'พัสดร',nn:'บอม',dept:'Operation',pos:'Admin',br:'br1',sd:'2026-04-19',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0},{fn:'ศิริวรรณ',ln:'กริ่มใจ',nn:'อ้อ',dept:'Operation',pos:'House Keeper',br:'br2',sd:'2026-04-21',base:0,emptype:'fulltime',ct:'permanent',ex:0,otrate:0}];
@@ -1274,7 +1317,7 @@ function rDash(){
       const c2=calcM(s,e2,key);
       brTotal+=c2.net;
       const isPaid=!!paidMap[s.id];
-      const isConfirmed=!!e2.confirmed;
+      const isConfirmed=isConf(key,s.id);
       const confirmedBadge=isConfirmed
         ?'<span style="font-size:10px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:20px;padding:1px 7px;margin-left:6px">✅ confirmed</span>'
         :'<span style="font-size:10px;color:#9ca3af;margin-left:6px">⏳</span>';
@@ -1307,7 +1350,7 @@ function rDash(){
     psHtml+='<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e5e7eb">🏥 Other</div>'+staffRows+'<div class="fx jb ic" style="padding:6px 0 2px;margin-top:3px"><span style="font-size:12px;font-weight:700">Total</span><span style="font-size:13px;font-weight:800;color:var(--nv)">'+fmt(brTotal)+' ฿</span></div></div>';
   }
   const totalStaff=act2.length;
-  const confirmedCount=act2.filter(s=>(P[key]&&P[key][s.id]&&P[key][s.id].confirmed)).length;
+  const confirmedCount=act2.filter(s=>isConf(key,s.id)).length;
   const confirmSummary=`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f0fdf4;border-radius:8px;margin-bottom:10px;border:1px solid #bbf7d0">
     <span style="font-size:12px;font-weight:600;color:#16a34a">✅ Staff Confirmed</span>
     <span style="font-size:13px;font-weight:800;color:#16a34a">${confirmedCount} / ${totalStaff}</span>
@@ -1639,9 +1682,29 @@ async function publishSalary(){
   const btn=q('btn-publish');
   const period=MTH[parseInt(m)-1]+' '+y;
   const key=mkKey(parseInt(m),parseInt(y));
-  const alreadyPublished=P[key]&&P[key]._meta&&P[key]._meta.published;
-  const confirmMsg=alreadyPublished
-    ?'This period was already published. Re-publishing will re-send LINE notifications and reset the 2h reminder / 5h auto-confirm timers. Continue for '+period+'?'
+  const meta=getPubMeta(key);
+  const isPublished=!!(meta&&meta.published);
+
+  if(isPublished){
+    // Toggle OFF — unpublish. No LINE messages; staff see "not published yet".
+    if(!confirm('UNPUBLISH '+period+'?\n\nStaff will no longer be able to open their salary in LINE until you publish again. Confirmations already made are kept.'))return;
+    btn.disabled=true;
+    try{
+      const res=await fetch('https://rcg-payroll-line-production.up.railway.app/api/unpublish-salary',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({month:m,year:y})
+      });
+      const data=await res.json();
+      if(data.ok){await reloadPubMeta();rPay();}
+      else alert('❌ Server error: '+data.msg);
+    }catch(e){alert('❌ Connection failed: '+e.message);}
+    btn.disabled=false;
+    return;
+  }
+
+  const wasEverPublished=!!(meta&&meta.publishedAt);
+  const confirmMsg=wasEverPublished
+    ?'Re-publish '+period+'? This re-sends LINE notifications to all staff and resets the 2h reminder / 5h auto-confirm timers.'
     :'Send LINE notification to all staff for '+period+'?';
   if(!confirm(confirmMsg))return;
   btn.innerHTML='<i class="ti ti-loader"></i> Sending...';btn.disabled=true;
@@ -1654,8 +1717,7 @@ async function publishSalary(){
     const data=await res.json();
     if(data.ok){
       alert('✅ Sent to '+data.sent+' of '+data.total+' staff with LINE registered!');
-      // Reload P from Firebase so the local copy picks up the _meta the server just wrote
-      await window.cloudLoad();
+      await reloadPubMeta();
       rPay();
     } else {
       alert('❌ Server error: '+data.msg);
@@ -1663,7 +1725,6 @@ async function publishSalary(){
   } catch(e){
     alert('❌ Connection failed: '+e.message);
   }
-  btn.innerHTML='<i class="ti ti-send"></i>Publish to LINE';
   btn.disabled=false;
 }
   
@@ -2016,13 +2077,16 @@ function rPay(){
     const topbar=q('pay-topbar');
     topbar&&topbar.parentNode.insertBefore(pubBadge,topbar);
   }
-  const _meta=P[key]&&P[key]._meta;
+  const _meta=getPubMeta(key);
+  const _pubBtn=q('btn-publish');
   if(_meta&&_meta.published){
     const dtStr=new Date(_meta.publishedAt).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
     pubBadge.style.cssText='background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:8px 16px;margin-bottom:14px;font-size:12px;font-weight:600;color:#16a34a;display:block';
     pubBadge.innerHTML='✅ Published to LINE — '+dtStr+(_meta.reminderSent?' · Reminder sent':'')+(_meta.autoConfirmDone?' · Unconfirmed staff auto-confirmed':'');
+    if(_pubBtn){_pubBtn.innerHTML='<i class="ti ti-toggle-right"></i>🟢 Published — click to unpublish';_pubBtn.style.background='#16a34a';}
   }else{
     pubBadge.style.display='none';
+    if(_pubBtn){_pubBtn.innerHTML='<i class="ti ti-send"></i>Publish to LINE';_pubBtn.style.background='#0e7490';}
   }
   const act=S.filter(s=>s.st==='Active'&&s.emptype!=='parttime');
   if(!act.length){q('pay-cards').innerHTML='<div class="no-data">No full-time / full-part-time staff</div>';return}
@@ -2334,15 +2398,15 @@ function saveAndCopy(sid){
   if(!P[key])P[key]={};
   const e=gatherE(sid);
   if(P[key][sid]&&P[key][sid].diligence)e.diligence=P[key][sid].diligence;
-  // Reuse existing snap ONLY if contract type hasn't changed — if ct changed, rebuild snap
-  const existingSnap=P[key][sid]&&P[key][sid].snap;
-  if(existingSnap&&existingSnap.ct===s.ct){e.snap=existingSnap;}
-  else{e.snap={base:s.base||0,hrrate:s.hrrate||0,fptdayrate:s.fptdayrate||0,otrate:s.otrate||0,ct:s.ct,emptype:s.emptype,fptmethod:s.fptmethod||'hourly',items:JSON.parse(JSON.stringify(s.items||[]))};}
+  // Always rebuild the snapshot from the CURRENT staff profile, so a base-salary
+  // or contract change made in staff settings takes effect with this one button
+  // (previously the old snapshot was kept unless the contract type changed).
+  e.snap={base:s.base||0,hrrate:s.hrrate||0,fptdayrate:s.fptdayrate||0,otrate:s.otrate||0,ct:s.ct,emptype:s.emptype,fptmethod:s.fptmethod||'hourly',items:JSON.parse(JSON.stringify(s.items||[]))};
   const c=calcM(s,e,key);e.net=c.net;e.payRows=buildPayRows(s,c);
   // Preserve confirmed status
   if(P[key][sid]&&P[key][sid].confirmed)e.confirmed=P[key][sid].confirmed;
   if(P[key][sid]&&P[key][sid].confirmedAt)e.confirmedAt=P[key][sid].confirmedAt;
-  P[key][sid]=e;svP();
+  P[key][sid]=e;flushP();
   // Then copy summary
   copyPaySummary(sid);
 }
@@ -2717,7 +2781,7 @@ function saveAll(){
       svA();
     }
   });
-  svP();alert('Saved ✓ — salaries locked for this period.');
+  flushP();alert('Saved ✓ — salaries locked for this period.');
 }
 function doExport(){
   const m=parseInt(qv('pm')),y=parseInt(qv('py')),key=mkKey(m,y);
