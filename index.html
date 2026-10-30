@@ -3232,7 +3232,9 @@ q('btn-del-branch').addEventListener('click',async()=>{if(!_eBid||!confirm('Dele
 q('btn-save-branch').addEventListener('click',async()=>{const prev=_eBid&&B.find(x=>x.id===_eBid)||{};const bo=q('b-bo').checked;const allocPct={};document.querySelectorAll('#b-pct-box .b-pct').forEach(i=>{if(i.value!=='')allocPct[i.dataset.br]=parseFloat(i.value)||0;});const nb={...prev,id:_eBid||'br'+Date.now(),name:q('b-name').value.trim(),nameEn:q('b-nameen')&&q('b-nameen').value.trim()||'',addr:q('b-addr').value.trim(),lic:q('b-lic').value.trim(),tel:q('b-tel').value.trim(),certname:q('b-certname').value.trim(),backoffice:bo,allocMode:bo?qv('b-mode')||'equal':(prev.allocMode||'equal'),allocPct:bo?allocPct:(prev.allocPct||{})};if(!nb.name){alert('Branch name required');return}
   // Freeze the old settings into periods that are already locked before they change
   await freezeAllocDue();
-  if(_eBid){const i=B.findIndex(x=>x.id===_eBid);if(i>=0)B[i]=nb;else B.push(nb)}else B.push(nb);svB();closeM('bm');rBrCards();popBrDl();});
+  if(_eBid){const i=B.findIndex(x=>x.id===_eBid);if(i>=0)B[i]=nb;else B.push(nb)}else B.push(nb);svB();closeM('bm');rBrCards();popBrDl();
+  // Locked periods with no allocation yet (e.g. first time back-office is ticked) take these settings now
+  freezeAllocDue();});
 
 /* ══════════════════ CONFIG: DEPARTMENTS & PAY ITEM NAMES ══════════════════ */
 function addDept(){const v=q('new-dept').value.trim();if(!v||(C.depts||[]).some(d=>(typeof d==='object'?d.name:d)===v))return;C.depts.push({name:v,days:26,hrs:9});svC();q('new-dept').value='';rDeptChips();popDeptDl();}
