@@ -50,6 +50,11 @@ Database: Firebase Firestore (collection `config`)
 - ข้อมูลเก่าที่ `payroll[key]._meta` ยังมี fallback อ่านได้
 - Server endpoints: `GET /api/salary/:staffId/:year/:month`, `POST /api/publish-salary`, `POST /api/unpublish-salary`, `POST /api/confirm-salary`, cron ทุก 10 นาที (Asia/Bangkok) เตือนที่ 2 ชม. และ auto-confirm ที่ 5 ชม.
 
+### แบ่งต้นทุนสำนักงานใหญ่ (Dashboard)
+- สาขาที่ติ๊ก `backoffice` ใน `config/branches` (พร้อม `allocMode: 'equal'|'custom'`, `allocPct{brId: %}`) จะถูกแบ่งยอด net ให้สาขาปฏิบัติการ (สาขาที่มีพนักงานในงวดนั้น) ด้วย `calcBranchAlloc()` ใต้ banner DASHBOARD
+- `config/alloc_hist` (**web app เขียนฝั่งเดียว** ผ่าน `freezeAllocDue()` เท่านั้น): `{ "2026_10": { frozenAt, staffBranch{sid: brId}, alloc: { frozenAt, settings[], opIds[] } | null } }` แช่ไว้เมื่องวดเลยวันที่ 2 ของเดือนถัดไป และ**ไม่เขียนทับของเดิม** งวดที่ยังเปิดใช้การตั้งค่าปัจจุบัน
+- Payroll Summary บน Dashboard: งวดที่ล็อกนับทุกคนที่มี entry (ลาออกแล้วก็นับ) ใช้สาขาจาก `staffBranch` · งวดที่เปิดนับ Active + คนที่มี entry · ไม่รวม part-time/หมอ
+
 ## บทเรียน (กันบั๊กซ้ำ)
 
 1. **ห้ามให้สองฝั่งเขียนเอกสารเดียวกัน** (เหตุการณ์ 29 ต.ค. 2026 สองแท็บเขียนทับกัน) เอกสารใหม่ต้องกำหนดชัดว่าใครเป็นคนเขียน

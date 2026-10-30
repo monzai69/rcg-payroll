@@ -175,6 +175,8 @@ onAuthStateChanged(auth,user=>{
 // ── FIREBASE HELPERS ──
 window.fbSet=async(col,id,data)=>{try{await setDoc(doc(db,col,id),data);return true;}catch(e){console.warn('fbSet fail',e);return false;}};
 window.fbGet=async(col,id)=>{try{const d=await getDoc(doc(db,col,id));return d.exists()?d.data():null;}catch(e){console.warn('fbGet fail',e);return null;}};
+// Like fbGet but throws on failure, so "doc missing" (null) is never confused with "read failed"
+window.fbGetStrict=async(col,id)=>{const d=await getDoc(doc(db,col,id));return d.exists()?d.data():null;};
 window.fbGetAll=async(col)=>{try{const s=await getDocs(collection(db,col));return s.docs.map(d=>d.data());}catch(e){console.warn('fbGetAll fail',e);return null;}};
 
 // ── CLOUD SYNC ──
@@ -228,6 +230,8 @@ window.cloudLoad=async()=>{
     if(payroll&&payroll.data){try{P=JSON.parse(payroll.data);localStorage.setItem(PK,payroll.data);loaded=true;window._payStamp=payroll.updatedAt||null;}catch{}}
     // Publish meta (published flag + confirmations) — server-owned, read-only here
     try{const pm=await window.fbGet('config','publish_meta');window.PUB=pm&&pm.data?JSON.parse(pm.data):{};}catch{window.PUB={};}
+    // Allocation history (frozen back-office split per locked period) — web-app-owned
+    try{const ah=await window.fbGetStrict('config','alloc_hist');window.ALH=ah&&ah.data?JSON.parse(ah.data):{};window._alhReady=true;}catch(e){console.warn('alloc_hist load fail',e);window.ALH={};window._alhReady=false;}
     if(company&&company.cth){C=company;localStorage.setItem(CK,JSON.stringify(company));loaded=true;}
     if(advance&&advance.data){try{A=JSON.parse(advance.data);localStorage.setItem(AK,advance.data);}catch{}}
     if(anytime&&anytime.data){try{AP=JSON.parse(anytime.data);localStorage.setItem(APK,anytime.data);}catch{}}
@@ -238,6 +242,7 @@ window.cloudLoad=async()=>{
     if(leaves&&leaves.data){try{LVR=JSON.parse(leaves.data);localStorage.setItem(LVRK,leaves.data);}catch{}}
     if(loaded){
       showStatus('✅ Synced from cloud', true);
+      await freezeAllocDue();
       // Refresh UI with cloud data
       rDash();rStaff&&rStaff();
     } else {
@@ -971,6 +976,15 @@ window.cloudLoad=async()=>{
   <div class="fr"><label>Address</label><textarea id="b-addr" rows="2"></textarea></div>
   <div class="g2"><div class="fr"><label>License No.</label><input id="b-lic" type="text"></div><div class="fr"><label>Telephone</label><input id="b-tel" type="text"></div></div>
   <div class="fr"><label>Name on Certificate (if different)</label><input id="b-certname" type="text"></div>
+  <div class="dv"></div>
+  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:600">
+    <input type="checkbox" id="b-bo" style="accent-color:var(--nv);width:15px;height:15px"> Back-office / shared-cost branch
+  </label>
+  <div class="ts tm" style="margin:3px 0 0 21px">ต้นทุนเงินเดือนของสาขานี้จะถูกแบ่งให้สาขาปฏิบัติการบน Dashboard</div>
+  <div id="b-bo-box" style="display:none;margin-top:10px">
+    <div class="fr"><label>Allocation</label><select id="b-mode"><option value="equal">Equal — หารเท่ากันทุกสาขาปฏิบัติการ</option><option value="custom">Custom % ต่อสาขา</option></select></div>
+    <div id="b-pct-box" style="display:none"></div>
+  </div>
   <div class="fx g8 jb mt16">
     <button class="btn bx bsm" id="btn-del-branch" style="display:none"><i class="ti ti-trash"></i>Delete</button>
     <div class="fx g8"><button class="btn bo" id="btn-cancel-branch">Cancel</button><button class="btn bp" id="btn-save-branch"><i class="ti ti-check"></i>Save</button></div>
@@ -1260,6 +1274,63 @@ document.querySelectorAll('#nav .ni').forEach(ni=>{
 });
 
 /* ══════════════════ DASHBOARD ══════════════════ */
+// ── Back-office cost allocation (HQ payroll split across operating branches) ──
+// Pure: brTotals {brId: net}, settings [{id,mode,pct}], opIds [brId] → shares per operating branch
+function calcBranchAlloc(brTotals,settings,opIds){
+  const r2=n=>Math.round(n*100)/100;
+  const share={},from={};
+  opIds.forEach(id=>share[id]=0);
+  (settings||[]).forEach(st=>{
+    const total=brTotals[st.id]||0;
+    const ops=opIds.filter(id=>id!==st.id);
+    const pctOf=id=>parseFloat(st.pct&&st.pct[id])||0;
+    const custom=st.mode==='custom';
+    const pctSum=custom?r2(ops.reduce((a,id)=>a+pctOf(id),0)):100;
+    const per={};
+    ops.forEach(id=>per[id]=r2(custom?total*pctOf(id)/100:total/ops.length));
+    // Rounding residue goes to the last branch so the split adds up exactly
+    const allocated=ops.length?r2(total*pctSum/100):0;
+    if(ops.length){const last=ops[ops.length-1];per[last]=r2(per[last]+allocated-ops.reduce((a,id)=>a+per[id],0));}
+    ops.forEach(id=>share[id]=r2(share[id]+per[id]));
+    from[st.id]={total,n:ops.length,per,pctSum,allocated,unallocated:r2(total-allocated)};
+  });
+  return{share,from};
+}
+// A period is "past" once its natural lock date (2nd of next month) arrives — manual unlock doesn't change this
+function isPeriodPast(key){const[y,m]=key.split('_').map(Number);return new Date()>=new Date(y,m,2);}
+function allocSettingsNow(){return B.filter(b=>b.backoffice).map(b=>({id:b.id,name:b.name,mode:b.allocMode==='custom'?'custom':'equal',pct:{...(b.allocPct||{})}}));}
+// Staff in the branch summary: past periods = everyone with an entry (even if resigned since);
+// open periods = Active staff plus anyone else with an entry. Part-time is paid separately.
+function periodStaff(key){
+  const ids=new Set(Object.keys(P[key]||{}).filter(k=>k[0]!=='_'));
+  const past=isPeriodPast(key);
+  return S.filter(s=>s.emptype!=='parttime'&&(ids.has(s.id)||(!past&&s.st==='Active')));
+}
+// Branch of a staff member in a period: frozen map for locked periods, else current profile
+function periodBranchOf(key){const rec=window.ALH&&window.ALH[key];const sb=rec&&rec.staffBranch||{};return s=>sb[s.id]!==undefined?sb[s.id]:s.br;}
+function allocOpIds(staff,brOf,settings){const bo=new Set(settings.map(x=>x.id));const has=new Set(staff.map(brOf));return B.filter(b=>has.has(b.id)&&!bo.has(b.id)).map(b=>b.id);}
+// Freeze staff→branch and the allocation settings into every locked period that doesn't have them yet.
+// config/alloc_hist is written only here; existing records are never overwritten.
+async function freezeAllocDue(){
+  if(!window._alhReady||!window.fbGetStrict)return;
+  const now=allocSettingsNow();
+  const due=Object.keys(P).filter(k=>/^\d{4}_\d{1,2}$/.test(k)&&isPeriodPast(k));
+  const needs=rec=>!rec||(!rec.alloc&&now.length>0);
+  if(!due.some(k=>needs(window.ALH[k])))return;
+  try{
+    const cur=await window.fbGetStrict('config','alloc_hist');
+    const H=cur&&cur.data?JSON.parse(cur.data):{};
+    const ts=new Date().toISOString();let changed=false;
+    due.forEach(k=>{
+      if(!H[k]){const sb={};periodStaff(k).forEach(s=>sb[s.id]=s.br||'');H[k]={frozenAt:ts,staffBranch:sb,alloc:null};changed=true;}
+      const rec=H[k];
+      if(!rec.alloc&&now.length){const brOf=s=>rec.staffBranch[s.id]!==undefined?rec.staffBranch[s.id]:s.br;rec.alloc={frozenAt:ts,settings:now,opIds:allocOpIds(periodStaff(k),brOf,now)};changed=true;}
+    });
+    if(!changed||await window.fbSet('config','alloc_hist',{data:JSON.stringify(H),updatedAt:Date.now()}))window.ALH=H;
+  }catch(e){console.warn('freezeAllocDue fail',e);}
+}
+function fmtThDate(iso){const d=new Date(iso);return d.getDate()+' '+['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][d.getMonth()]+' '+d.getFullYear();}
+function togAllocCmp(cb){window._allocCmp=cb.checked;rDash();}
 function rDash(){
   const act=S.filter(x=>x.st==='Active'),m=parseInt(qv('dash-pm'))||new Date().getMonth()+1,y=parseInt(qv('dash-py'))||new Date().getFullYear(),key=mkKey(m,y);
   q('dash-p').textContent='Period: '+MTH[m-1]+' '+y;
@@ -1303,9 +1374,11 @@ function rDash(){
     (pendingAdv>0?'<div onclick="navTo(\'adv\')" style="flex:1;min-width:160px;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.background=\'#fef3c7\'" onmouseout="this.style.background=\'#fffbeb\'"><span style="font-size:22px">💳</span><div><div style="font-size:13px;font-weight:700;color:#92400e">Pending Advances</div><div style="font-size:20px;font-weight:800;color:#f59e0b">'+pendingAdv+' record'+(pendingAdv>1?'s':'')+'</div></div></div>':'')+
     '</div>':'';
   // Branch-grouped payroll summary
-  const act2=S.filter(x=>x.st==='Active'&&x.emptype!=='parttime');
-  const branchIds=[...new Set(act2.map(s=>s.br))].filter(Boolean);
-  const noBranch=act2.filter(s=>!s.br||!B.find(b=>b.id===s.br));
+  const act2=periodStaff(key);
+  const brOf=periodBranchOf(key);
+  const isBr=id=>!!(id&&B.find(b=>b.id===id));
+  const branchIds=[...new Set(act2.map(brOf))].filter(isBr);
+  const noBranch=act2.filter(s=>!isBr(brOf(s)));
   // Paid status stored in P[key]._paid = {staffId: true/false}
   const paidMap=(P[key]&&P[key]._paid)||{};
   let psHtml='';
@@ -1332,16 +1405,49 @@ function rDash(){
     });
     return{brTotal,staffRows};
   };
+  const blocks={};
+  branchIds.forEach(bid=>{blocks[bid]=renderBranchStaff(act2.filter(s=>brOf(s)===bid));grandTotal+=blocks[bid].brTotal;});
+  // Back-office allocation: locked periods use the settings frozen in alloc_hist, open ones use current settings
+  const rec=window.ALH&&window.ALH[key];
+  const frozen=isPeriodPast(key)&&rec&&rec.alloc?rec.alloc:null;
+  const nowSet=allocSettingsNow();
+  const aSet=frozen?frozen.settings:nowSet;
+  const brTotals={};branchIds.forEach(b=>brTotals[b]=blocks[b].brTotal);
+  const aOps=frozen?frozen.opIds:allocOpIds(act2,brOf,aSet);
+  const alloc=aSet.length?calcBranchAlloc(brTotals,aSet,aOps):null;
+  const cmp=alloc&&frozen&&window._allocCmp?calcBranchAlloc(brTotals,nowSet,allocOpIds(act2,brOf,nowSet)):null;
+  const boIds=new Set(aSet.map(x=>x.id));
+  const nowBo=new Set(nowSet.map(x=>x.id));
+  const boName=st=>{const b=B.find(x=>x.id===st.id);return b?b.name:st.name||st.id;};
+  const shareLbl=(st,f,bid)=>st.mode==='custom'?(parseFloat(st.pct&&st.pct[bid])||0)+'%':'÷'+f.n;
+  const lineRow=(lbl,val,style)=>'<div class="fx jb ic" style="padding:2px 0;'+(style||'')+'"><span style="font-size:12px">'+lbl+'</span><span style="font-size:12px;font-weight:700">'+val+'</span></div>';
+  if(alloc){
+    const desc=aSet.map(st=>{const f=alloc.from[st.id];return boName(st)+': '+(st.mode==='custom'?'Custom '+aOps.filter(id=>id!==st.id).map(id=>brN(id)+' '+(parseFloat(st.pct&&st.pct[id])||0)+'%').join(' / '):'Equal ÷'+f.n);}).join(' · ');
+    const src=frozen?'📌 สัดส่วนที่ใช้: '+desc+' <span style="color:#9ca3af">(บันทึก ณ '+fmtThDate(frozen.frozenAt)+')</span>'
+      :'⚙️ สัดส่วน: '+desc+' <span style="color:#9ca3af">('+(isPeriodPast(key)?'ใช้การตั้งค่าปัจจุบัน — ยังไม่ได้บันทึกของงวดนี้':'ใช้การตั้งค่าปัจจุบัน — จะบันทึกเมื่อล็อกงวด')+')</span>';
+    psHtml+='<div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#374151">'+src+
+      (frozen?'<div style="margin-top:6px"><label style="display:inline-flex;align-items:center;gap:6px;margin:0;cursor:pointer;font-weight:600;font-size:12px;color:#374151"><input type="checkbox" '+(window._allocCmp?'checked':'')+' onchange="togAllocCmp(this)" style="width:15px;height:15px;margin:0;accent-color:var(--nv)">เทียบกับการตั้งค่าปัจจุบัน</label></div>':'')+'</div>';
+  }
   branchIds.forEach(bid=>{
     const br=B.find(b=>b.id===bid);
-    const brStaff=act2.filter(s=>s.br===bid);
-    if(!brStaff.length)return;
-    const{brTotal,staffRows}=renderBranchStaff(brStaff);
-    grandTotal+=brTotal;
+    const{brTotal,staffRows}=blocks[bid];
+    let foot='<div class="fx jb ic" style="padding:6px 0 2px;margin-top:3px"><span style="font-size:12px;font-weight:700;color:#374151">Total</span><span style="font-size:13px;font-weight:800;color:var(--nv)">'+fmt(brTotal)+' ฿</span></div>';
+    if(alloc&&boIds.has(bid)){
+      const f=alloc.from[bid];
+      foot+='<div style="font-size:11.5px;color:#3730a3;margin-top:2px">↪ ต้นทุนหลังบ้าน แบ่งให้ '+f.n+' สาขา</div>';
+      if(f.unallocated)foot+='<div style="font-size:11.5px;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:3px 8px;margin-top:4px">⚠️ '+(f.n?'Custom รวม '+f.pctSum+'%':'ไม่มีสาขาปฏิบัติการ')+' — ยังไม่ได้แบ่ง '+fmt(f.unallocated)+' ฿</div>';
+    }else if(alloc&&alloc.share[bid]!==undefined){
+      aSet.forEach(st=>{const f=alloc.from[st.id];if(f&&f.per[bid]!==undefined)foot+=lineRow('+ ส่วนแบ่ง '+boName(st)+' ('+shareLbl(st,f,bid)+')',fmt(f.per[bid])+' ฿','color:#3730a3');});
+      const transfer=brTotal+alloc.share[bid];
+      foot+='<div class="fx jb ic" style="padding:6px 0 2px;margin-top:3px;border-top:1px dashed #d1d5db"><span style="font-size:12.5px;font-weight:800;color:#1a1a2e">ยอดที่ต้องโอน</span><span style="font-size:14px;font-weight:800;color:#1a1a2e">'+fmt(transfer)+' ฿</span></div>';
+      if(cmp){
+        if(nowBo.has(bid))foot+='<div style="font-size:11.5px;color:#6b7280">ตั้งค่าปัจจุบัน: เป็นสาขาหลังบ้าน</div>';
+        else{const alt=brTotal+(cmp.share[bid]||0),d=alt-transfer;foot+=lineRow('ถ้าใช้ค่าปัจจุบัน',fmt(alt)+' ฿ <span style="color:'+(d>0?'#b91c1c':d<0?'var(--ok)':'#9ca3af')+'">('+(d>0?'+':d<0?'−':'±')+fmt(Math.abs(d))+')</span>','color:#6b7280');}
+      }
+    }
     psHtml+='<div style="margin-bottom:14px">'+
       '<div style="font-size:11px;font-weight:800;color:var(--nv);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e5e7eb">🏥 '+(br?br.name:bid)+'</div>'+
-      staffRows+
-      '<div class="fx jb ic" style="padding:6px 0 2px;margin-top:3px"><span style="font-size:12px;font-weight:700;color:#374151">Total</span><span style="font-size:13px;font-weight:800;color:var(--nv)">'+fmt(brTotal)+' ฿</span></div>'+
+      staffRows+foot+
     '</div>';
   });
   if(noBranch.length){
@@ -3099,11 +3205,34 @@ function rReport4(){
 }
 
 /* ══════════════════ BRANCH SETTINGS ══════════════════ */
-function rBrCards(){q('branch-cards').innerHTML=B.map(b=>'<div class="branch-card"><div class="fx jb ic" style="margin-bottom:8px"><div style="font-weight:700;font-size:14px"><i class="ti ti-building" style="margin-right:7px;color:var(--nv)"></i>'+b.name+'</div><button class="btn bo bsm edit-br-btn" data-id="'+b.id+'"><i class="ti ti-edit"></i>Edit</button></div><div class="g2" style="font-size:12.5px;gap:7px;color:#6b7280">'+(b.addr?'<div>'+b.addr+'</div>':'<div>No address</div>')+'<div>'+(b.lic?'License: '+b.lic:'-')+(b.tel?' · '+b.tel:'')+'</div></div>'+(b.certname?'<div style="font-size:11.5px;color:#9ca3af;margin-top:4px">Cert: '+b.certname+'</div>':'')+'</div>').join('');document.querySelectorAll('.edit-br-btn').forEach(btn=>btn.addEventListener('click',function(){openBM(this.dataset.id);}));}
-function openBM(id){_eBid=id||null;q('btn-del-branch').style.display=id?'inline-flex':'none';if(id){const b=B.find(x=>x.id===id);if(!b)return;q('bm-title').textContent='Edit Branch';q('b-name').value=b.name||'';q('b-nameen')&&(q('b-nameen').value=b.nameEn||'');q('b-addr').value=b.addr||'';q('b-lic').value=b.lic||'';q('b-tel').value=b.tel||'';q('b-certname').value=b.certname||'';}else{q('bm-title').textContent='Add Branch';['b-name','b-nameen','b-addr','b-lic','b-tel','b-certname'].forEach(x=>{const el=q(x);if(el)el.value='';});}openM('bm');}
+function rBrCards(){q('branch-cards').innerHTML=B.map(b=>'<div class="branch-card"><div class="fx jb ic" style="margin-bottom:8px"><div style="font-weight:700;font-size:14px"><i class="ti ti-building" style="margin-right:7px;color:var(--nv)"></i>'+b.name+(b.backoffice?' <span class="badge" style="background:#eef2ff;color:#3730a3;margin-left:6px">Back-office · '+(b.allocMode==='custom'?'Custom %':'Equal')+'</span>':'')+'</div><button class="btn bo bsm edit-br-btn" data-id="'+b.id+'"><i class="ti ti-edit"></i>Edit</button></div><div class="g2" style="font-size:12.5px;gap:7px;color:#6b7280">'+(b.addr?'<div>'+b.addr+'</div>':'<div>No address</div>')+'<div>'+(b.lic?'License: '+b.lic:'-')+(b.tel?' · '+b.tel:'')+'</div></div>'+(b.certname?'<div style="font-size:11.5px;color:#9ca3af;margin-top:4px">Cert: '+b.certname+'</div>':'')+'</div>').join('');document.querySelectorAll('.edit-br-btn').forEach(btn=>btn.addEventListener('click',function(){openBM(this.dataset.id);}));}
+// Back-office allocation controls: % inputs for every other non-back-office branch
+function rBrPctBox(pct){
+  const others=B.filter(b=>b.id!==_eBid&&!b.backoffice);
+  const box=q('b-pct-box');
+  if(!others.length){box.innerHTML='<div class="ts tm">ยังไม่มีสาขาปฏิบัติการ</div>';return;}
+  box.innerHTML=others.map(b=>'<div class="fx jb ic" style="margin-bottom:6px"><span style="font-size:13px">'+b.name+'</span><span class="fx ic g8"><input type="number" class="b-pct" data-br="'+b.id+'" min="0" max="100" step="0.01" style="width:90px;text-align:right" value="'+(pct&&pct[b.id]!=null?pct[b.id]:'')+'">%</span></div>').join('')+'<div id="b-pct-sum" style="font-size:12px;font-weight:700;margin-top:4px"></div>';
+  box.querySelectorAll('.b-pct').forEach(i=>i.addEventListener('input',updBrPctSum));
+  updBrPctSum();
+}
+function updBrPctSum(){
+  const el=q('b-pct-sum');if(!el)return;
+  let sum=0;document.querySelectorAll('#b-pct-box .b-pct').forEach(i=>sum+=parseFloat(i.value)||0);
+  sum=Math.round(sum*100)/100;
+  el.innerHTML=sum===100?'<span style="color:var(--ok)">รวม 100% ✓</span>':'<span style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:3px 8px;display:inline-block">⚠️ รวม '+sum+'% (ควรเท่ากับ 100%)</span>';
+}
+function updBrBoUI(){
+  const on=q('b-bo').checked;q('b-bo-box').style.display=on?'block':'none';
+  q('b-pct-box').style.display=on&&qv('b-mode')==='custom'?'block':'none';
+}
+q('b-bo').addEventListener('change',updBrBoUI);q('b-mode').addEventListener('change',updBrBoUI);
+function openBM(id){_eBid=id||null;q('btn-del-branch').style.display=id?'inline-flex':'none';const b=id?B.find(x=>x.id===id):null;if(id&&!b)return;if(b){q('bm-title').textContent='Edit Branch';q('b-name').value=b.name||'';q('b-nameen')&&(q('b-nameen').value=b.nameEn||'');q('b-addr').value=b.addr||'';q('b-lic').value=b.lic||'';q('b-tel').value=b.tel||'';q('b-certname').value=b.certname||'';}else{q('bm-title').textContent='Add Branch';['b-name','b-nameen','b-addr','b-lic','b-tel','b-certname'].forEach(x=>{const el=q(x);if(el)el.value='';});}q('b-bo').checked=!!(b&&b.backoffice);q('b-mode').value=b&&b.allocMode==='custom'?'custom':'equal';rBrPctBox(b&&b.allocPct);updBrBoUI();openM('bm');}
 q('btn-abranch').addEventListener('click',()=>openBM(null));q('btn-cancel-branch').addEventListener('click',()=>closeM('bm'));
-q('btn-del-branch').addEventListener('click',()=>{if(!_eBid||!confirm('Delete?'))return;B=B.filter(b=>b.id!==_eBid);svB();closeM('bm');rBrCards();popBrDl();});
-q('btn-save-branch').addEventListener('click',()=>{const nb={id:_eBid||'br'+Date.now(),name:q('b-name').value.trim(),nameEn:q('b-nameen')&&q('b-nameen').value.trim()||'',addr:q('b-addr').value.trim(),lic:q('b-lic').value.trim(),tel:q('b-tel').value.trim(),certname:q('b-certname').value.trim()};if(!nb.name){alert('Branch name required');return}if(_eBid){const i=B.findIndex(x=>x.id===_eBid);if(i>=0)B[i]=nb;else B.push(nb)}else B.push(nb);svB();closeM('bm');rBrCards();popBrDl();});
+q('btn-del-branch').addEventListener('click',async()=>{if(!_eBid||!confirm('Delete?'))return;await freezeAllocDue();B=B.filter(b=>b.id!==_eBid);svB();closeM('bm');rBrCards();popBrDl();});
+q('btn-save-branch').addEventListener('click',async()=>{const prev=_eBid&&B.find(x=>x.id===_eBid)||{};const bo=q('b-bo').checked;const allocPct={};document.querySelectorAll('#b-pct-box .b-pct').forEach(i=>{if(i.value!=='')allocPct[i.dataset.br]=parseFloat(i.value)||0;});const nb={...prev,id:_eBid||'br'+Date.now(),name:q('b-name').value.trim(),nameEn:q('b-nameen')&&q('b-nameen').value.trim()||'',addr:q('b-addr').value.trim(),lic:q('b-lic').value.trim(),tel:q('b-tel').value.trim(),certname:q('b-certname').value.trim(),backoffice:bo,allocMode:bo?qv('b-mode')||'equal':(prev.allocMode||'equal'),allocPct:bo?allocPct:(prev.allocPct||{})};if(!nb.name){alert('Branch name required');return}
+  // Freeze the old settings into periods that are already locked before they change
+  await freezeAllocDue();
+  if(_eBid){const i=B.findIndex(x=>x.id===_eBid);if(i>=0)B[i]=nb;else B.push(nb)}else B.push(nb);svB();closeM('bm');rBrCards();popBrDl();});
 
 /* ══════════════════ CONFIG: DEPARTMENTS & PAY ITEM NAMES ══════════════════ */
 function addDept(){const v=q('new-dept').value.trim();if(!v||(C.depts||[]).some(d=>(typeof d==='object'?d.name:d)===v))return;C.depts.push({name:v,days:26,hrs:9});svC();q('new-dept').value='';rDeptChips();popDeptDl();}
